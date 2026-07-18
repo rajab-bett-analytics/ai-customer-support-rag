@@ -1,0 +1,36 @@
+# ==========================================================
+# Project Metadata
+# ==========================================================
+
+[project]
+name = "ai-customer-support-rag"
+version = "0.1.0"
+description = "Production-ready AI Customer Support RAG Platform built with FastAPI, LangChain, PostgreSQL, pgvector, Streamlit, Celery, Redis, MinIO, and Docker."
+requires-python = ">=3.12"
+
+# ==========================================================
+# Black Configuration
+# ==========================================================
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+# ==========================================================
+# Ruff Configuration
+# ==========================================================
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+# ==========================================================
+# Pytest Configuration
+# ==========================================================
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
