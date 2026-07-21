@@ -1,69 +1,67 @@
 """
 Database configuration.
 
-This module creates the SQLAlchemy engine and session factory
-used throughout the application.
+This module creates the SQLAlchemy asynchronous engine and
+session factory used throughout the application.
 
-All database interactions should obtain a session from the
-get_db() dependency defined here.
+All database interactions should obtain an AsyncSession
+from the get_db() dependency defined here.
 
 Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
 
-from typing import Generator
+from collections.abc import AsyncGenerator
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from backend.core.config import settings
 
 # ---------------------------------------------------------
-# SQLAlchemy Engine
+# SQLAlchemy Async Engine
 #
 # The engine manages the application's connection pool
-# and communicates with the PostgreSQL database.
+# and communicates asynchronously with PostgreSQL.
 # ---------------------------------------------------------
 
-engine = create_engine(
+engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
 )
 
 # ---------------------------------------------------------
-# Session Factory
+# Async Session Factory
 #
-# Creates new database sessions for each request.
+# Creates a new AsyncSession for each request.
 # ---------------------------------------------------------
 
-SessionLocal = sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
     bind=engine,
-    autocommit=False,
-    autoflush=False,
+    expire_on_commit=False,
 )
 
 # ---------------------------------------------------------
 # Database Dependency
 #
-# FastAPI will inject a database session into endpoints
-# that depend on get_db().
+# FastAPI injects an AsyncSession into endpoints that
+# depend on get_db().
 # ---------------------------------------------------------
 
 
-def get_db() -> Generator[Session, None, None]:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    Provide a database session.
+    Provide an asynchronous database session.
 
     A new session is created for each request and is
     automatically closed when the request finishes.
 
     Yields:
-        Session: SQLAlchemy database session.
+        AsyncSession: SQLAlchemy asynchronous session.
     """
 
-    db = SessionLocal()
-
-    try:
-        yield db
-    finally:
-        db.close()
+    async with AsyncSessionLocal() as session:
+        yield session

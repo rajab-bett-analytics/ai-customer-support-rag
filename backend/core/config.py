@@ -61,7 +61,7 @@ class Settings(BaseSettings):
             A PostgreSQL connection string compatible with SQLAlchemy.
         """
         return (
-            f"postgresql+psycopg://"
+            f"postgresql+asyncpg://"
             f"{self.POSTGRES_USER}:"
             f"{self.POSTGRES_PASSWORD}@"
             f"{self.POSTGRES_HOST}:"
