@@ -4,5 +4,7 @@ pydantic-settings
 psycopg[binary]
 email-validator
 alembic
-pwdlib
+pwdlib[argon2]
 asyncpg
+PyJWT
+python-multipart

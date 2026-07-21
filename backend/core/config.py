@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # ---------------------------------------------------------
-    # Database
+    # Database Settings
     # ---------------------------------------------------------
 
     POSTGRES_HOST: str
@@ -42,26 +42,52 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
 
     # ---------------------------------------------------------
+    # Authentication Settings
+    # ---------------------------------------------------------
+
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # ---------------------------------------------------------
     # AI Provider
     # ---------------------------------------------------------
 
     OPENAI_API_KEY: str = ""
-    
-    
-        # ---------------------------------------------------------
-    # Computed Database URL
+
+    # ---------------------------------------------------------
+    # Async Database URL (FastAPI)
     # ---------------------------------------------------------
 
     @property
     def DATABASE_URL(self) -> str:
         """
-        Build the SQLAlchemy PostgreSQL connection URL.
+        Build the asynchronous PostgreSQL connection URL.
 
-        Returns:
-            A PostgreSQL connection string compatible with SQLAlchemy.
+        Used by FastAPI and SQLAlchemy AsyncSession.
         """
         return (
             f"postgresql+asyncpg://"
+            f"{self.POSTGRES_USER}:"
+            f"{self.POSTGRES_PASSWORD}@"
+            f"{self.POSTGRES_HOST}:"
+            f"{self.POSTGRES_PORT}/"
+            f"{self.POSTGRES_DB}"
+        )
+
+    # ---------------------------------------------------------
+    # Sync Database URL (Alembic)
+    # ---------------------------------------------------------
+
+    @property
+    def ALEMBIC_DATABASE_URL(self) -> str:
+        """
+        Build the synchronous PostgreSQL connection URL.
+
+        Used exclusively by Alembic migrations.
+        """
+        return (
+            f"postgresql+psycopg://"
             f"{self.POSTGRES_USER}:"
             f"{self.POSTGRES_PASSWORD}@"
             f"{self.POSTGRES_HOST}:"
@@ -81,11 +107,7 @@ class Settings(BaseSettings):
 
 
 # ---------------------------------------------------------
-# Global settings instance
-#
-# Import this object anywhere in the application:
-#
-# from backend.core.config import settings
+# Global Settings Instance
 # ---------------------------------------------------------
 
 settings = Settings()

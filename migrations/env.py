@@ -1,3 +1,14 @@
+"""
+Alembic environment configuration.
+
+This module configures Alembic for managing database schema
+migrations. Alembic uses a synchronous SQLAlchemy engine,
+while the FastAPI application uses an asynchronous engine.
+
+Author: Rajab Cheruiyot Bett
+Project: AI Customer Support RAG Platform
+"""
+
 from logging.config import fileConfig
 
 from alembic import context
@@ -5,24 +16,38 @@ from sqlalchemy import engine_from_config, pool
 
 from backend.core.config import settings
 from backend.db.base import Base
-import backend.models
 
-# Alembic Config object
+# Import all models so Alembic can discover them
+import backend.models  # noqa: F401
+
+# ---------------------------------------------------------
+# Alembic Configuration
+# ---------------------------------------------------------
+
 config = context.config
 
-# Use the application's database configuration
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Use the synchronous database URL for Alembic
+config.set_main_option(
+    "sqlalchemy.url",
+    settings.ALEMBIC_DATABASE_URL,
+)
 
 # Configure Python logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Metadata for autogenerate
+# Metadata used for autogenerate
 target_metadata = Base.metadata
 
 
+# ---------------------------------------------------------
+# Offline Migrations
+# ---------------------------------------------------------
+
 def run_migrations_offline() -> None:
-    """Run migrations in offline mode."""
+    """
+    Run migrations without connecting to the database.
+    """
 
     url = config.get_main_option("sqlalchemy.url")
 
@@ -38,11 +63,17 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+# ---------------------------------------------------------
+# Online Migrations
+# ---------------------------------------------------------
+
 def run_migrations_online() -> None:
-    """Run migrations in online mode."""
+    """
+    Run migrations while connected to the database.
+    """
 
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
@@ -57,6 +88,10 @@ def run_migrations_online() -> None:
         with context.begin_transaction():
             context.run_migrations()
 
+
+# ---------------------------------------------------------
+# Entry Point
+# ---------------------------------------------------------
 
 if context.is_offline_mode():
     run_migrations_offline()
