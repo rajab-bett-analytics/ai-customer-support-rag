@@ -11,6 +11,7 @@ Project: AI Customer Support RAG Platform
 """
 
 from fastapi import FastAPI
+from backend.core.config import settings
 
 # ---------------------------------------------------------
 # Create the FastAPI application instance.
@@ -20,9 +21,9 @@ from fastapi import FastAPI
 # ---------------------------------------------------------
 
 app = FastAPI(
-    title="AI Customer Support RAG API",
+    title=settings.APP_NAME,
     description="Production-ready AI Customer Support platform powered by FastAPI and Retrieval-Augmented Generation (RAG).",
-    version="0.1.0",
+    version=settings.APP_NAME,
 )
 
 # ---------------------------------------------------------
