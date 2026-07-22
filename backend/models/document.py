@@ -14,8 +14,9 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from backend.models.mixins import TimestampMixin
+
 from backend.db.base import Base
+from backend.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from backend.models.embedding import Embedding
@@ -43,17 +44,23 @@ class Document(TimestampMixin, Base):
     # ---------------------------------------------------------
 
     uploaded_by: Mapped[int] = mapped_column(
-        ForeignKey("users.id"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # ---------------------------------------------------------
-    # Document Information
+    # Original Document Information
     # ---------------------------------------------------------
 
     filename: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
+    )
+
+    stored_filename: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True,
     )
 
     file_path: Mapped[str] = mapped_column(
@@ -64,6 +71,20 @@ class Document(TimestampMixin, Base):
     mime_type: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
+    )
+
+    file_size: Mapped[int] = mapped_column(
+        nullable=False,
+    )
+
+    # ---------------------------------------------------------
+    # Processing Status
+    # ---------------------------------------------------------
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="uploaded",
     )
 
     # ---------------------------------------------------------
