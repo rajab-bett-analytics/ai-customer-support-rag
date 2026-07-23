@@ -53,7 +53,8 @@ class Settings(BaseSettings):
     # AI Provider
     # ---------------------------------------------------------
 
-    OPENAI_API_KEY: str = ""
+    GOOGLE_API_KEY: str 
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
 
     # ---------------------------------------------------------
     # Document Storage

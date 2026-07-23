@@ -1,6 +1,10 @@
 """
 Document service.
 
+Handles document upload, validation, storage,
+PDF text extraction, cleaning, chunking and
+embedding generation.
+
 Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
@@ -14,7 +18,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.config import settings
 from backend.models.document import Document
 from backend.models.user import User
-from backend.repositories.document_repository import DocumentRepository
+from backend.repositories.document_repository import (
+    DocumentRepository,
+)
+from backend.services.embedding_service import (
+    EmbeddingService,
+)
+from backend.utils.chunker import chunk_text
+from backend.utils.pdf import extract_text_from_pdf
+from backend.utils.text import clean_text
 
 
 class DocumentService:
@@ -26,21 +38,33 @@ class DocumentService:
 
     def __init__(self) -> None:
         self.document_repository = DocumentRepository()
+        self.embedding_service = EmbeddingService()
 
     async def save_document(
         self,
         db: AsyncSession,
         current_user: User,
         file: UploadFile,
-    ) -> Document:
+    ) -> dict:
         """
-        Validate, store and persist an uploaded PDF.
+        Upload, process and index a PDF document.
         """
 
         self._validate_pdf(file)
 
+        # ---------------------------------------------------------
+        # Ensure upload directory exists
+        # ---------------------------------------------------------
+
         upload_dir = Path(settings.UPLOAD_DIRECTORY)
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        upload_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        # ---------------------------------------------------------
+        # Save uploaded file
+        # ---------------------------------------------------------
 
         stored_filename = f"{uuid4()}.pdf"
         file_path = upload_dir / stored_filename
@@ -49,6 +73,10 @@ class DocumentService:
 
         with open(file_path, "wb") as buffer:
             buffer.write(file_bytes)
+
+        # ---------------------------------------------------------
+        # Save document metadata
+        # ---------------------------------------------------------
 
         document = Document(
             uploaded_by=current_user.id,
@@ -60,10 +88,80 @@ class DocumentService:
             status="uploaded",
         )
 
-        return await self.document_repository.create(
+        document = await self.document_repository.create(
             db,
             document,
         )
+
+        try:
+            # -----------------------------------------------------
+            # Extract PDF text
+            # -----------------------------------------------------
+
+            raw_text = extract_text_from_pdf(
+                file_path,
+            )
+
+            # -----------------------------------------------------
+            # Clean extracted text
+            # -----------------------------------------------------
+
+            cleaned_text = clean_text(
+                raw_text,
+            )
+
+            # -----------------------------------------------------
+            # Split into chunks
+            # -----------------------------------------------------
+
+            chunks = chunk_text(
+                cleaned_text,
+            )
+
+            # -----------------------------------------------------
+            # Generate & store embeddings
+            # -----------------------------------------------------
+
+            embeddings = (
+                await self.embedding_service.create_embeddings(
+                    db=db,
+                    document_id=document.id,
+                    chunks=chunks,
+                )
+            )
+
+            # -----------------------------------------------------
+            # Mark document as processed
+            # -----------------------------------------------------
+
+            document.status = "processed"
+
+            await db.commit()
+            await db.refresh(document)
+
+        except Exception as exc:
+            document.status = "failed"
+
+            await db.commit()
+            await db.refresh(document)
+
+            raise HTTPException(
+                status_code=500,
+                detail=f"Document processing failed: {exc}",
+            ) from exc
+
+        # ---------------------------------------------------------
+        # Response
+        # ---------------------------------------------------------
+
+        return {
+            "document_id": document.id,
+            "filename": document.filename,
+            "status": document.status,
+            "chunks_created": len(chunks),
+            "embeddings_created": len(embeddings),
+            "file_size": document.file_size,
+        }
 
     @classmethod
     def _validate_pdf(

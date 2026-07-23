@@ -1,8 +1,9 @@
 """
 Embedding database model.
 
-Stores document chunks and their vector embeddings used
-for semantic search in the RAG pipeline.
+Stores document chunks together with their vector embeddings
+used for semantic search in the Retrieval-Augmented Generation
+(RAG) pipeline.
 
 Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
@@ -11,11 +12,13 @@ Project: AI Customer Support RAG Platform
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from backend.models.mixins import TimestampMixin
+
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base
+from backend.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from backend.models.document import Document
@@ -23,7 +26,7 @@ if TYPE_CHECKING:
 
 class Embedding(TimestampMixin, Base):
     """
-    Represents a chunk of a document.
+    Represents one embedded text chunk from a document.
     """
 
     __tablename__ = "embeddings"
@@ -42,8 +45,12 @@ class Embedding(TimestampMixin, Base):
     # ---------------------------------------------------------
 
     document_id: Mapped[int] = mapped_column(
-        ForeignKey("documents.id"),
+        ForeignKey(
+            "documents.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
+        index=True,
     )
 
     # ---------------------------------------------------------
@@ -61,7 +68,17 @@ class Embedding(TimestampMixin, Base):
     )
 
     # ---------------------------------------------------------
-    # Relationship
+    # Vector Embedding
+    # Gemini text-embedding-004 returns 3072 dimensions
+    # ---------------------------------------------------------
+
+    embedding: Mapped[list[float]] = mapped_column(
+        Vector(3072),
+        nullable=False,
+    )
+
+    # ---------------------------------------------------------
+    # Relationships
     # ---------------------------------------------------------
 
     document: Mapped["Document"] = relationship(

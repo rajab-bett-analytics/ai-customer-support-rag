@@ -9,3 +9,5 @@ asyncpg
 PyJWT
 python-multipart
 pymupdf
+pgvector
+google-genai
