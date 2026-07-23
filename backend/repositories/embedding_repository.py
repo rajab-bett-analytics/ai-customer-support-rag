@@ -7,7 +7,7 @@ Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.embedding import Embedding
@@ -73,8 +73,43 @@ class EmbeddingRepository(BaseRepository[Embedding]):
         result = await db.execute(
             select(Embedding)
             .order_by(
-                Embedding.embedding.cosine_distance(query_embedding)
+                Embedding.embedding.cosine_distance(
+                    query_embedding
+                )
             )
+            .limit(limit)
+        )
+
+        return list(result.scalars().all())
+
+    async def keyword_search(
+        self,
+        db: AsyncSession,
+        query: str,
+        limit: int = 5,
+    ) -> list[Embedding]:
+        """
+        Retrieve document chunks containing the query
+        keywords using PostgreSQL ILIKE matching.
+        """
+
+        keywords = [
+            word.strip()
+            for word in query.split()
+            if word.strip()
+        ]
+
+        if not keywords:
+            return []
+
+        conditions = [
+            Embedding.chunk_text.ilike(f"%{word}%")
+            for word in keywords
+        ]
+
+        result = await db.execute(
+            select(Embedding)
+            .where(or_(*conditions))
             .limit(limit)
         )
 
