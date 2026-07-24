@@ -62,6 +62,20 @@ class ConversationService:
             conversation_id,
         )
 
+    async def get_user_conversations(
+        self,
+        db: AsyncSession,
+        user_id: int,
+    ) -> list[Conversation]:
+        """
+        Retrieve all conversations belonging to a user.
+        """
+
+        return await self.conversation_repository.get_by_user(
+            db=db,
+            user_id=user_id,
+        )
+
     async def get_latest_conversation(
         self,
         db: AsyncSession,
@@ -74,6 +88,20 @@ class ConversationService:
         return await self.conversation_repository.get_latest(
             db,
             user_id,
+        )
+
+    async def delete_conversation(
+        self,
+        db: AsyncSession,
+        conversation_id: int,
+    ) -> None:
+        """
+        Delete a conversation.
+        """
+
+        await self.conversation_repository.delete(
+            db,
+            conversation_id,
         )
 
     async def save_message(
