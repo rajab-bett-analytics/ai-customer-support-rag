@@ -25,6 +25,7 @@ class ChatService:
     """
 
     def __init__(self) -> None:
+
         self.client = genai.Client(
             api_key=settings.GOOGLE_API_KEY,
         )
@@ -39,14 +40,6 @@ class ChatService:
         question: str,
         conversation_id: int | None = None,
     ) -> tuple[int, str, list[dict]]:
-        """
-        Answer a user's question while persisting the
-        conversation history.
-
-        Returns:
-            Conversation ID, AI answer, and retrieved
-            document sources.
-        """
 
         conversation = await self._get_or_create_conversation(
             db=db,
@@ -67,42 +60,60 @@ class ChatService:
             conversation_id=conversation.id,
         )
 
-        context, embeddings = (
-            await self.retrieval_service.retrieve_context(
-                db=db,
-                query=question,
-            )
+
+        # Handle normal conversation first
+        small_talk_answer = self._handle_small_talk(
+            question
         )
 
-        if not context:
+        if small_talk_answer:
 
-            answer = (
-                "I couldn't find any relevant information "
-                "in the uploaded documents."
-            )
+            answer = small_talk_answer
+            embeddings = []
 
         else:
 
-            prompt = self._build_prompt(
-                history=history,
-                question=question,
-                context=context,
+            context, embeddings = (
+                await self.retrieval_service.retrieve_context(
+                    db=db,
+                    query=question,
+                )
             )
 
-            try:
+            if not context:
 
-                response = self.client.models.generate_content(
-                    model=settings.CHAT_MODEL,
-                    contents=prompt,
+                answer = (
+                    "I couldn't find that information in "
+                    "the uploaded documents. "
+                    "Please try asking a question related "
+                    "to the available documents."
                 )
 
-                answer = response.text.strip()
+            else:
 
-            except Exception as exc:
+                prompt = self._build_prompt(
+                    history=history,
+                    question=question,
+                    context=context,
+                )
 
-                raise RuntimeError(
-                    f"Failed to generate AI response: {exc}"
-                ) from exc
+                try:
+
+                    response = (
+                        self.client.models.generate_content(
+                            model=settings.CHAT_MODEL,
+                            contents=prompt,
+                        )
+                    )
+
+                    answer = response.text.strip()
+
+                except Exception as exc:
+
+                    raise RuntimeError(
+                        f"Failed to generate AI response: {exc}"
+                    ) from exc
+
 
         await self.conversation_service.save_message(
             db=db,
@@ -110,6 +121,7 @@ class ChatService:
             role="assistant",
             content=answer,
         )
+
 
         sources = [
             {
@@ -119,40 +131,73 @@ class ChatService:
             for embedding in embeddings
         ]
 
+
         return (
             conversation.id,
             answer,
             sources,
         )
 
-    async def _get_or_create_conversation(
+
+    def _handle_small_talk(
         self,
-        db: AsyncSession,
-        user_id: int,
-        conversation_id: int | None,
         question: str,
-    ) -> Conversation:
+    ) -> str | None:
         """
-        Retrieve an existing conversation or create one.
+        Handle simple conversation without RAG.
         """
 
-        if conversation_id is not None:
+        message = question.lower().strip()
 
-            conversation = (
-                await self.conversation_service.get_conversation(
-                    db=db,
-                    conversation_id=conversation_id,
-                )
+
+        greetings = {
+            "hello",
+            "hi",
+            "hey",
+            "good morning",
+            "good afternoon",
+            "good evening",
+        }
+
+
+        if message in greetings:
+
+            return (
+                "Hello 👋\n\n"
+                "I am your AI Customer Support Assistant. "
+                "I can help answer questions from uploaded "
+                "company documents and policies."
             )
 
-            if conversation is not None:
-                return conversation
 
-        return await self.conversation_service.create_conversation(
-            db=db,
-            user_id=user_id,
-            title=question[:60],
-        )
+        if (
+            "who are you" in message
+            or "what are you" in message
+        ):
+
+            return (
+                "I am an AI Customer Support Assistant "
+                "powered by Retrieval-Augmented Generation "
+                "(RAG). I help users find accurate answers "
+                "from uploaded company documents."
+            )
+
+
+        if message in {
+            "thanks",
+            "thank you",
+            "thankyou",
+        }:
+
+            return (
+                "You're welcome! 😊 "
+                "Feel free to ask if you need anything else."
+            )
+
+
+        return None
+
+
 
     def _build_prompt(
         self,
@@ -167,29 +212,67 @@ class ChatService:
         return f"""
 You are an AI Customer Support Assistant.
 
-Your job is to answer customer questions using ONLY the
-provided document context and conversation history.
+You answer questions using the provided document
+context.
 
-Rules:
+Important rules:
 
-- Do not use outside knowledge.
-- Do not invent facts.
-- Use the conversation history to understand follow-up
-  questions.
-- Base your answer only on the retrieved document context.
-- If the answer cannot be found in the document context,
-  respond exactly:
+1. Use ONLY the provided document context for factual
+answers.
 
-I don't have enough information in the uploaded documents.
+2. Never invent policies, numbers, dates, salaries,
+or regulations.
+
+3. If the answer is not available in the context,
+say:
+"I couldn't find that information in the uploaded
+documents."
+
+4. If the user asks a follow-up question, use the
+conversation history to understand the reference.
+
+5. Give clear, professional answers.
 
 Conversation History:
 {history}
 
+
 Document Context:
 {context}
+
 
 Current Question:
 {question}
 
+
 Answer:
 """
+
+
+    async def _get_or_create_conversation(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        conversation_id: int | None,
+        question: str,
+    ) -> Conversation:
+
+        if conversation_id is not None:
+
+            conversation = (
+                await self.conversation_service
+                .get_conversation(
+                    db=db,
+                    conversation_id=conversation_id,
+                )
+            )
+
+            if conversation is not None:
+                return conversation
+
+
+        return await self.conversation_service.create_conversation(
+            db=db,
+            user_id=user_id,
+            title=question[:60],
+        )

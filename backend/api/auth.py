@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.dependencies import get_current_user
 from backend.db.database import get_db
+from backend.models.user import User
 from backend.schemas.token import Token
 from backend.schemas.user import (
     UserCreate,
@@ -11,10 +13,12 @@ from backend.schemas.user import (
 )
 from backend.services.auth_service import AuthService
 
+
 router = APIRouter(
     prefix="/auth",
     tags=["Authentication"],
 )
+
 
 auth_service = AuthService()
 
@@ -59,3 +63,17 @@ async def login(
         db,
         user_data,
     )
+
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+)
+async def get_profile(
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    """
+    Return the currently authenticated user's profile.
+    """
+
+    return current_user

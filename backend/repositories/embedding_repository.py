@@ -62,21 +62,35 @@ class EmbeddingRepository(BaseRepository[Embedding]):
         db: AsyncSession,
         query_embedding: list[float],
         limit: int = 5,
+        threshold: float = 0.45,
     ) -> list[Embedding]:
         """
-        Retrieve the most similar document chunks using
-        pgvector cosine distance.
+        Retrieve relevant document chunks using pgvector
+        cosine similarity.
 
-        Results are ordered from most similar to least similar.
+        Only returns chunks above the relevance threshold
+        to prevent unrelated context being sent to the LLM.
+
+        Args:
+            db: Database session.
+            query_embedding: User query vector.
+            limit: Maximum results.
+            threshold: Maximum cosine distance allowed.
+
+        Returns:
+            Relevant document chunks.
         """
+
+        distance = Embedding.embedding.cosine_distance(
+            query_embedding
+        )
 
         result = await db.execute(
             select(Embedding)
-            .order_by(
-                Embedding.embedding.cosine_distance(
-                    query_embedding
-                )
+            .where(
+                distance < threshold
             )
+            .order_by(distance)
             .limit(limit)
         )
 
@@ -89,27 +103,57 @@ class EmbeddingRepository(BaseRepository[Embedding]):
         limit: int = 5,
     ) -> list[Embedding]:
         """
-        Retrieve document chunks containing the query
-        keywords using PostgreSQL ILIKE matching.
+        Retrieve document chunks using keyword matching.
+
+        Removes common words to avoid noisy searches.
         """
 
+        stop_words = {
+            "how",
+            "many",
+            "what",
+            "who",
+            "where",
+            "when",
+            "why",
+            "is",
+            "are",
+            "the",
+            "a",
+            "an",
+            "of",
+            "to",
+            "for",
+            "in",
+            "on",
+            "and",
+        }
+
         keywords = [
-            word.strip()
+            word.lower().strip()
             for word in query.split()
-            if word.strip()
+            if (
+                word.lower().strip()
+                and word.lower().strip()
+                not in stop_words
+            )
         ]
 
         if not keywords:
             return []
 
         conditions = [
-            Embedding.chunk_text.ilike(f"%{word}%")
-            for word in keywords
+            Embedding.chunk_text.ilike(
+                f"%{keyword}%"
+            )
+            for keyword in keywords
         ]
 
         result = await db.execute(
             select(Embedding)
-            .where(or_(*conditions))
+            .where(
+                or_(*conditions)
+            )
             .limit(limit)
         )
 

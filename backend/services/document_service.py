@@ -162,6 +162,56 @@ class DocumentService:
             "embeddings_created": len(embeddings),
             "file_size": document.file_size,
         }
+    async def get_documents(
+        self,
+        db: AsyncSession,
+        current_user: User,
+    ) -> list[Document]:
+        """
+        Retrieve all documents uploaded by the current user.
+        """
+
+        return await self.document_repository.get_by_owner(
+            db=db,
+            uploaded_by=current_user.id,
+        )
+
+    async def delete_document(
+        self,
+        db: AsyncSession,
+        current_user: User,
+        document_id: int,
+    ) -> None:
+        """
+        Delete a document owned by the current user.
+        """
+
+        document = await self.document_repository.get_by_id(
+            db=db,
+            document_id=document_id,
+        )
+
+        if document is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found.",
+            )
+
+        if document.uploaded_by != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to delete this document.",
+            )
+
+        file_path = Path(document.file_path)
+
+        if file_path.exists():
+            file_path.unlink()
+
+        await self.document_repository.delete_document(
+            db=db,
+            document=document,
+        )
 
     @classmethod
     def _validate_pdf(

@@ -56,6 +56,7 @@ function ChatArea({
     ]);
 
     const currentQuestion = question;
+
     setQuestion("");
     setLoading(true);
 
@@ -68,7 +69,9 @@ function ChatArea({
       const isNewConversation =
         conversationId === null;
 
-      setConversationId(response.conversation_id);
+      setConversationId(
+        response.conversation_id,
+      );
 
       const assistantMessage: ChatMessage = {
         role: "assistant",
@@ -91,7 +94,7 @@ function ChatArea({
         {
           role: "assistant",
           content:
-            "Something went wrong while contacting the AI.",
+            "Sorry, something went wrong while contacting the AI.",
         },
       ]);
     } finally {
@@ -100,53 +103,100 @@ function ChatArea({
   }
 
   return (
-    <main className="flex flex-1 flex-col bg-gray-50">
-      <div className="flex-1 space-y-4 overflow-y-auto p-6">
-        {messages.length === 0 ? (
-          <p className="text-gray-500">
-            Start a conversation with your AI assistant.
-          </p>
-        ) : (
-          messages.map((message, index) => (
-            <MessageBubble
-              key={index}
-              message={message}
-            />
-          ))
-        )}
+    <main className="flex flex-1 flex-col bg-slate-100">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-8 py-8">
+        <div className="mx-auto max-w-5xl space-y-8">
+          {messages.length === 0 ? (
+            <div className="flex min-h-[520px] flex-col items-center justify-center rounded-3xl border border-gray-200 bg-white p-12 text-center shadow-sm">
+              <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-blue-100 text-5xl">
+                🤖
+              </div>
 
-        {loading && (
-          <div className="max-w-3xl rounded-2xl border border-gray-200 bg-white p-4 text-gray-500 italic shadow-sm">
-            AI is typing...
-          </div>
-        )}
+              <h1 className="text-4xl font-bold text-gray-900">
+                AI Customer Support
+              </h1>
 
-        <div ref={messagesEndRef} />
+              <p className="mt-4 max-w-2xl text-lg leading-8 text-gray-500">
+                Ask questions about your uploaded
+                documents and receive accurate,
+                AI-powered answers grounded in your
+                knowledge base.
+              </p>
+
+              <div className="mt-8 rounded-xl bg-slate-100 px-6 py-4 text-sm text-gray-600">
+                💡 Try asking:
+                <br />
+                <span className="italic">
+                  "Summarize our refund policy."
+                </span>
+              </div>
+            </div>
+          ) : (
+            messages.map((message, index) => (
+              <MessageBubble
+                key={index}
+                message={message}
+              />
+            ))
+          )}
+
+          {loading && (
+            <div className="max-w-4xl rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 font-semibold">
+                  AI
+                </div>
+
+                <div>
+                  <p className="font-medium text-gray-800">
+                    AI Assistant
+                  </p>
+
+                  <p className="animate-pulse text-sm text-gray-500">
+                    Thinking...
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
-      <div className="border-t bg-white p-4">
-        <div className="flex gap-2">
-          <input
-            className="flex-1 rounded-lg border p-3 focus:border-blue-500 focus:outline-none"
-            placeholder="Type your message..."
-            value={question}
-            onChange={(e) =>
-              setQuestion(e.target.value)
-            }
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                handleSend();
+      {/* Chat Composer */}
+      <div className="sticky bottom-0 border-t border-gray-200 bg-white/95 px-8 py-6 backdrop-blur">
+        <div className="mx-auto max-w-5xl">
+          <div className="flex items-end gap-4 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+            <input
+              className="flex-1 bg-transparent px-3 py-3 text-gray-900 placeholder:text-gray-400 focus:outline-none"
+              placeholder="Ask a question about your documents..."
+              value={question}
+              onChange={(e) =>
+                setQuestion(e.target.value)
               }
-            }}
-          />
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSend();
+                }
+              }}
+            />
 
-          <button
-            onClick={handleSend}
-            disabled={loading}
-            className="rounded-lg bg-blue-600 px-6 text-white transition hover:bg-blue-700 disabled:bg-gray-400"
-          >
-            {loading ? "Sending..." : "Send"}
-          </button>
+            <button
+              onClick={handleSend}
+              disabled={
+                loading || !question.trim()
+              }
+              className="rounded-xl bg-blue-600 px-6 py-3 font-medium text-white shadow transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+            >
+              {loading ? "..." : "➤ Send"}
+            </button>
+          </div>
+
+          <p className="mt-3 text-center text-xs text-gray-500">
+            AI responses are generated from your uploaded knowledge base.
+          </p>
         </div>
       </div>
     </main>
