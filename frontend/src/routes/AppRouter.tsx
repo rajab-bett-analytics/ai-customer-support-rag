@@ -9,6 +9,9 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
 import DashboardPage from "../pages/DashboardPage";
+import DocumentsPage from "../pages/DocumentsPage";
+import AnalyticsPage from "../pages/AnalyticsPage";
+import ProfilePage from "../pages/ProfilePage";
 
 function AppRouter() {
   return (
@@ -34,6 +37,33 @@ function AppRouter() {
           element={
             <ProtectedRoute>
               <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/documents"
+          element={
+            <ProtectedRoute>
+              <DocumentsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute>
+              <AnalyticsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
             </ProtectedRoute>
           }
         />

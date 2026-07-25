@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 
+import NavigationItem from "./NavigationItem";
 import ConversationList from "../conversations/ConversationList";
 
 import type { ChatMessage } from "../../features/chat/types/ChatMessage";
@@ -29,6 +30,30 @@ function Sidebar({
 
   return (
     <aside className="flex h-full w-72 flex-col border-r bg-white">
+      {/* Application Navigation */}
+      <div className="space-y-2 border-b p-4">
+        <NavigationItem
+          to="/dashboard"
+          label="💬 Chat"
+        />
+
+        <NavigationItem
+          to="/documents"
+          label="📄 Documents"
+        />
+
+        <NavigationItem
+          to="/analytics"
+          label="📊 Analytics"
+        />
+
+        <NavigationItem
+          to="/profile"
+          label="👤 Profile"
+        />
+      </div>
+
+      {/* Chat Section */}
       <div className="border-b p-4">
         <button
           onClick={handleNewConversation}
