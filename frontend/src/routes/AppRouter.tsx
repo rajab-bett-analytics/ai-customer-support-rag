@@ -5,6 +5,7 @@ import {
 } from "react-router-dom";
 
 import ProtectedRoute from "../components/ProtectedRoute";
+import DashboardLayout from "../components/layout/DashboardLayout";
 
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
@@ -17,56 +18,37 @@ function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/"
-          element={<LoginPage />}
-        />
+        <Route path="/" element={<LoginPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
 
         <Route
-          path="/login"
-          element={<LoginPage />}
-        />
-
-        <Route
-          path="/register"
-          element={<RegisterPage />}
-        />
-
-        <Route
-          path="/dashboard"
           element={
             <ProtectedRoute>
-              <DashboardPage />
+              <DashboardLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route
+            path="/dashboard"
+            element={<DashboardPage />}
+          />
 
-        <Route
-          path="/documents"
-          element={
-            <ProtectedRoute>
-              <DocumentsPage />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/documents"
+            element={<DocumentsPage />}
+          />
 
-        <Route
-          path="/analytics"
-          element={
-            <ProtectedRoute>
-              <AnalyticsPage />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/analytics"
+            element={<AnalyticsPage />}
+          />
 
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <ProfilePage />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/profile"
+            element={<ProfilePage />}
+          />
+        </Route>
       </Routes>
     </BrowserRouter>
   );
