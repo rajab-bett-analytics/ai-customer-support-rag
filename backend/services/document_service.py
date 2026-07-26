@@ -37,8 +37,12 @@ class DocumentService:
     ALLOWED_CONTENT_TYPES = {"application/pdf"}
 
     def __init__(self) -> None:
-        self.document_repository = DocumentRepository()
-        self.embedding_service = EmbeddingService()
+        self.document_repository = (
+            DocumentRepository()
+        )
+        self.embedding_service = (
+            EmbeddingService()
+        )
 
     async def save_document(
         self,
@@ -56,7 +60,10 @@ class DocumentService:
         # Ensure upload directory exists
         # ---------------------------------------------------------
 
-        upload_dir = Path(settings.UPLOAD_DIRECTORY)
+        upload_dir = Path(
+            settings.UPLOAD_DIRECTORY
+        )
+
         upload_dir.mkdir(
             parents=True,
             exist_ok=True,
@@ -66,16 +73,24 @@ class DocumentService:
         # Save uploaded file
         # ---------------------------------------------------------
 
-        stored_filename = f"{uuid4()}.pdf"
-        file_path = upload_dir / stored_filename
+        stored_filename = (
+            f"{uuid4()}.pdf"
+        )
+
+        file_path = (
+            upload_dir / stored_filename
+        )
 
         file_bytes = await file.read()
 
-        with open(file_path, "wb") as buffer:
+        with open(
+            file_path,
+            "wb",
+        ) as buffer:
             buffer.write(file_bytes)
 
         # ---------------------------------------------------------
-        # Save document metadata
+        # Save metadata
         # ---------------------------------------------------------
 
         document = Document(
@@ -88,38 +103,52 @@ class DocumentService:
             status="uploaded",
         )
 
-        document = await self.document_repository.create(
-            db,
-            document,
+        document = (
+            await self.document_repository.create(
+                db,
+                document,
+            )
         )
 
         try:
+
             # -----------------------------------------------------
-            # Extract PDF text
+            # Extract PDF pages
             # -----------------------------------------------------
 
-            raw_text = extract_text_from_pdf(
+            pages = extract_text_from_pdf(
                 file_path,
             )
 
             # -----------------------------------------------------
-            # Clean extracted text
+            # Clean each page individually
             # -----------------------------------------------------
 
-            cleaned_text = clean_text(
-                raw_text,
-            )
+            cleaned_pages: list[
+                dict[str, int | str]
+            ] = []
+
+            for page in pages:
+
+                cleaned_pages.append(
+                    {
+                        "page": page["page"],
+                        "text": clean_text(
+                            str(page["text"])
+                        ),
+                    }
+                )
 
             # -----------------------------------------------------
-            # Split into chunks
+            # Chunk pages
             # -----------------------------------------------------
 
             chunks = chunk_text(
-                cleaned_text,
+                cleaned_pages,
             )
 
             # -----------------------------------------------------
-            # Generate & store embeddings
+            # Generate embeddings
             # -----------------------------------------------------
 
             embeddings = (
@@ -131,15 +160,18 @@ class DocumentService:
             )
 
             # -----------------------------------------------------
-            # Mark document as processed
+            # Mark processed
             # -----------------------------------------------------
 
-            document.status = "processed"
+            document.status = (
+                "processed"
+            )
 
             await db.commit()
             await db.refresh(document)
 
         except Exception as exc:
+
             document.status = "failed"
 
             await db.commit()
@@ -147,7 +179,10 @@ class DocumentService:
 
             raise HTTPException(
                 status_code=500,
-                detail=f"Document processing failed: {exc}",
+                detail=(
+                    "Document processing "
+                    f"failed: {exc}"
+                ),
             ) from exc
 
         # ---------------------------------------------------------
@@ -158,22 +193,29 @@ class DocumentService:
             "document_id": document.id,
             "filename": document.filename,
             "status": document.status,
+            "pages": len(pages),
             "chunks_created": len(chunks),
-            "embeddings_created": len(embeddings),
+            "embeddings_created": len(
+                embeddings
+            ),
             "file_size": document.file_size,
         }
+
     async def get_documents(
         self,
         db: AsyncSession,
         current_user: User,
     ) -> list[Document]:
         """
-        Retrieve all documents uploaded by the current user.
+        Retrieve all documents uploaded by the current
+        user.
         """
 
-        return await self.document_repository.get_by_owner(
-            db=db,
-            uploaded_by=current_user.id,
+        return (
+            await self.document_repository.get_by_owner(
+                db=db,
+                uploaded_by=current_user.id,
+            )
         )
 
     async def delete_document(
@@ -186,9 +228,11 @@ class DocumentService:
         Delete a document owned by the current user.
         """
 
-        document = await self.document_repository.get_by_id(
-            db=db,
-            document_id=document_id,
+        document = (
+            await self.document_repository.get_by_id(
+                db=db,
+                document_id=document_id,
+            )
         )
 
         if document is None:
@@ -197,13 +241,21 @@ class DocumentService:
                 detail="Document not found.",
             )
 
-        if document.uploaded_by != current_user.id:
+        if (
+            document.uploaded_by
+            != current_user.id
+        ):
             raise HTTPException(
                 status_code=403,
-                detail="Not authorized to delete this document.",
+                detail=(
+                    "Not authorized to "
+                    "delete this document."
+                ),
             )
 
-        file_path = Path(document.file_path)
+        file_path = Path(
+            document.file_path
+        )
 
         if file_path.exists():
             file_path.unlink()
@@ -222,7 +274,10 @@ class DocumentService:
         Validate uploaded document.
         """
 
-        if file.content_type not in cls.ALLOWED_CONTENT_TYPES:
+        if (
+            file.content_type
+            not in cls.ALLOWED_CONTENT_TYPES
+        ):
             raise HTTPException(
                 status_code=400,
                 detail="Only PDF files are allowed.",

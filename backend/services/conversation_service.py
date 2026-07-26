@@ -21,12 +21,18 @@ from backend.repositories.message_repository import (
 
 class ConversationService:
     """
-    Handles conversation management.
+    Handles conversation lifecycle and message history.
     """
 
+    MAX_HISTORY_MESSAGES = 20
+
     def __init__(self) -> None:
-        self.conversation_repository = ConversationRepository()
-        self.message_repository = MessageRepository()
+        self.conversation_repository = (
+            ConversationRepository()
+        )
+        self.message_repository = (
+            MessageRepository()
+        )
 
     async def create_conversation(
         self,
@@ -44,8 +50,8 @@ class ConversationService:
         )
 
         return await self.conversation_repository.create(
-            db,
-            conversation,
+            db=db,
+            conversation=conversation,
         )
 
     async def get_conversation(
@@ -58,8 +64,8 @@ class ConversationService:
         """
 
         return await self.conversation_repository.get_by_id(
-            db,
-            conversation_id,
+            db=db,
+            conversation_id=conversation_id,
         )
 
     async def get_user_conversations(
@@ -68,7 +74,7 @@ class ConversationService:
         user_id: int,
     ) -> list[Conversation]:
         """
-        Retrieve all conversations belonging to a user.
+        Retrieve all conversations for a user.
         """
 
         return await self.conversation_repository.get_by_user(
@@ -82,12 +88,12 @@ class ConversationService:
         user_id: int,
     ) -> Conversation | None:
         """
-        Retrieve the user's most recent conversation.
+        Retrieve the user's latest conversation.
         """
 
         return await self.conversation_repository.get_latest(
-            db,
-            user_id,
+            db=db,
+            user_id=user_id,
         )
 
     async def delete_conversation(
@@ -100,8 +106,8 @@ class ConversationService:
         """
 
         await self.conversation_repository.delete(
-            db,
-            conversation_id,
+            db=db,
+            conversation_id=conversation_id,
         )
 
     async def save_message(
@@ -112,18 +118,18 @@ class ConversationService:
         content: str,
     ) -> Message:
         """
-        Save a message to a conversation.
+        Persist a conversation message.
         """
 
         message = Message(
             conversation_id=conversation_id,
             role=role,
-            content=content,
+            content=content.strip(),
         )
 
         return await self.message_repository.create_message(
-            db,
-            message,
+            db=db,
+            message=message,
         )
 
     async def get_messages(
@@ -132,28 +138,22 @@ class ConversationService:
         conversation_id: int,
     ) -> list[Message]:
         """
-        Retrieve all messages belonging to a conversation.
+        Retrieve messages for a conversation.
         """
 
         return await self.message_repository.get_by_conversation(
-            db,
-            conversation_id,
+            db=db,
+            conversation_id=conversation_id,
         )
 
     async def get_history(
         self,
         db: AsyncSession,
         conversation_id: int,
+        max_messages: int | None = None,
     ) -> str:
         """
-        Build a formatted conversation history for the LLM.
-
-        Args:
-            db: Database session.
-            conversation_id: Conversation identifier.
-
-        Returns:
-            Conversation history formatted as dialogue.
+        Build formatted conversation history for the AI.
         """
 
         messages = await self.get_messages(
@@ -164,11 +164,26 @@ class ConversationService:
         if not messages:
             return ""
 
+        limit = (
+            max_messages
+            if max_messages is not None
+            else self.MAX_HISTORY_MESSAGES
+        )
+
+        messages = messages[-limit:]
+
         history: list[str] = []
 
         for message in messages:
+
+            role = (
+                "Assistant"
+                if message.role == "assistant"
+                else "User"
+            )
+
             history.append(
-                f"{message.role.title()}: {message.content}"
+                f"{role}: {message.content.strip()}"
             )
 
         return "\n".join(history)

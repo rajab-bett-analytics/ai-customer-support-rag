@@ -4,7 +4,7 @@ import {
   Route,
 } from "react-router-dom";
 
-import ProtectedRoute from "../components/ProtectedRoute";
+import ProtectedRoute from "../components/ui/ProtectedRoute";
 import DashboardLayout from "../components/layout/DashboardLayout";
 
 import LoginPage from "../pages/LoginPage";

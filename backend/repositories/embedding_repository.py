@@ -7,17 +7,54 @@ Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.models.embedding import Embedding
 from backend.repositories.base import BaseRepository
 
 
-class EmbeddingRepository(BaseRepository[Embedding]):
+class EmbeddingRepository(
+    BaseRepository[Embedding]
+):
     """
-    Repository for embedding-specific database operations.
+    Repository for embedding-related database operations.
     """
+
+    STOP_WORDS = {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "do",
+        "does",
+        "for",
+        "from",
+        "how",
+        "in",
+        "is",
+        "it",
+        "many",
+        "of",
+        "on",
+        "or",
+        "the",
+        "to",
+        "was",
+        "were",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "with",
+    }
 
     def __init__(self) -> None:
         super().__init__(Embedding)
@@ -28,12 +65,17 @@ class EmbeddingRepository(BaseRepository[Embedding]):
         document_id: int,
     ) -> list[Embedding]:
         """
-        Retrieve all embeddings belonging to a document.
+        Retrieve all embeddings for a document.
         """
 
         result = await db.execute(
-            select(Embedding).where(
+            select(Embedding)
+            .where(
                 Embedding.document_id == document_id
+            )
+            .order_by(
+                Embedding.page_number,
+                Embedding.chunk_index,
             )
         )
 
@@ -45,7 +87,7 @@ class EmbeddingRepository(BaseRepository[Embedding]):
         embeddings: list[Embedding],
     ) -> list[Embedding]:
         """
-        Persist multiple embeddings in a single transaction.
+        Persist multiple embeddings.
         """
 
         db.add_all(embeddings)
@@ -65,32 +107,26 @@ class EmbeddingRepository(BaseRepository[Embedding]):
         threshold: float = 0.45,
     ) -> list[Embedding]:
         """
-        Retrieve relevant document chunks using pgvector
-        cosine similarity.
-
-        Only returns chunks above the relevance threshold
-        to prevent unrelated context being sent to the LLM.
-
-        Args:
-            db: Database session.
-            query_embedding: User query vector.
-            limit: Maximum results.
-            threshold: Maximum cosine distance allowed.
-
-        Returns:
-            Relevant document chunks.
+        Retrieve semantically similar chunks.
         """
 
-        distance = Embedding.embedding.cosine_distance(
-            query_embedding
+        distance = (
+            Embedding.embedding.cosine_distance(
+                query_embedding,
+            )
         )
 
         result = await db.execute(
             select(Embedding)
-            .where(
-                distance < threshold
+            .options(
+                selectinload(
+                    Embedding.document,
+                )
             )
-            .order_by(distance)
+            .where(
+                distance < threshold,
+            )
+            .order_by(distance.asc())
             .limit(limit)
         )
 
@@ -103,39 +139,16 @@ class EmbeddingRepository(BaseRepository[Embedding]):
         limit: int = 5,
     ) -> list[Embedding]:
         """
-        Retrieve document chunks using keyword matching.
-
-        Removes common words to avoid noisy searches.
+        Retrieve chunks using keyword matching.
         """
 
-        stop_words = {
-            "how",
-            "many",
-            "what",
-            "who",
-            "where",
-            "when",
-            "why",
-            "is",
-            "are",
-            "the",
-            "a",
-            "an",
-            "of",
-            "to",
-            "for",
-            "in",
-            "on",
-            "and",
-        }
-
         keywords = [
-            word.lower().strip()
+            word.lower().strip(".,?!")
             for word in query.split()
             if (
-                word.lower().strip()
-                and word.lower().strip()
-                not in stop_words
+                word.lower().strip(".,?!")
+                and word.lower().strip(".,?!")
+                not in self.STOP_WORDS
             )
         ]
 
@@ -143,16 +156,25 @@ class EmbeddingRepository(BaseRepository[Embedding]):
             return []
 
         conditions = [
-            Embedding.chunk_text.ilike(
-                f"%{keyword}%"
-            )
+            func.lower(
+                Embedding.chunk_text
+            ).contains(keyword)
             for keyword in keywords
         ]
 
         result = await db.execute(
             select(Embedding)
+            .options(
+                selectinload(
+                    Embedding.document,
+                )
+            )
             .where(
                 or_(*conditions)
+            )
+            .order_by(
+                Embedding.page_number,
+                Embedding.chunk_index,
             )
             .limit(limit)
         )

@@ -14,8 +14,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import ForeignKey, Integer, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
 
 from backend.db.base import Base
 from backend.models.mixins import TimestampMixin
@@ -26,10 +36,19 @@ if TYPE_CHECKING:
 
 class Embedding(TimestampMixin, Base):
     """
-    Represents one embedded text chunk from a document.
+    Represents one embedded document chunk.
     """
 
     __tablename__ = "embeddings"
+
+    __table_args__ = (
+        Index(
+            "ix_embedding_document_page_chunk",
+            "document_id",
+            "page_number",
+            "chunk_index",
+        ),
+    )
 
     # ---------------------------------------------------------
     # Primary Key
@@ -54,12 +73,23 @@ class Embedding(TimestampMixin, Base):
     )
 
     # ---------------------------------------------------------
-    # Chunk Information
+    # Chunk Metadata
     # ---------------------------------------------------------
+
+    page_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        index=True,
+    )
 
     chunk_index: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
+    )
+
+    section: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
     )
 
     chunk_text: Mapped[str] = mapped_column(
@@ -69,7 +99,6 @@ class Embedding(TimestampMixin, Base):
 
     # ---------------------------------------------------------
     # Vector Embedding
-    # Gemini text-embedding-004 returns 3072 dimensions
     # ---------------------------------------------------------
 
     embedding: Mapped[list[float]] = mapped_column(
@@ -83,4 +112,5 @@ class Embedding(TimestampMixin, Base):
 
     document: Mapped["Document"] = relationship(
         back_populates="embeddings",
+        lazy="selectin",
     )

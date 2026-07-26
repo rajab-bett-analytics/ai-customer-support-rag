@@ -1,13 +1,21 @@
 """
 Conversation API.
 
-Provides endpoints for managing user conversations.
+Provides endpoints for retrieving and managing user
+conversations.
 
 Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.dependencies import get_current_user
@@ -29,41 +37,58 @@ router = APIRouter(
 
 conversation_service = ConversationService()
 
+DatabaseSession = Annotated[
+    AsyncSession,
+    Depends(get_db),
+]
+
+CurrentUser = Annotated[
+    User,
+    Depends(get_current_user),
+]
+
 
 @router.get(
     "",
     response_model=list[ConversationSummary],
-    summary="List conversations",
+    status_code=status.HTTP_200_OK,
+    summary="List Conversations",
+    description=(
+        "Retrieve all conversations belonging to the "
+        "authenticated user."
+    ),
 )
 async def list_conversations(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DatabaseSession,
+    current_user: CurrentUser,
 ) -> list[ConversationSummary]:
     """
-    Retrieve all conversations belonging to the
-    authenticated user.
+    Retrieve all conversations for the current user.
     """
 
-    conversations = await conversation_service.get_user_conversations(
+    return await conversation_service.get_user_conversations(
         db=db,
         user_id=current_user.id,
     )
-
-    return conversations
 
 
 @router.get(
     "/{conversation_id}",
     response_model=ConversationResponse,
-    summary="Get conversation",
+    status_code=status.HTTP_200_OK,
+    summary="Get Conversation",
+    description=(
+        "Retrieve a conversation together with all "
+        "messages exchanged within it."
+    ),
 )
 async def get_conversation(
     conversation_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DatabaseSession,
+    current_user: CurrentUser,
 ) -> ConversationResponse:
     """
-    Retrieve a conversation and all its messages.
+    Retrieve a single conversation.
     """
 
     conversation = await conversation_service.get_conversation(
@@ -71,9 +96,12 @@ async def get_conversation(
         conversation_id=conversation_id,
     )
 
-    if conversation is None:
+    if (
+        conversation is None
+        or conversation.user_id != current_user.id
+    ):
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found.",
         )
 
@@ -95,12 +123,17 @@ async def get_conversation(
 
 @router.delete(
     "/{conversation_id}",
-    summary="Delete conversation",
+    status_code=status.HTTP_200_OK,
+    summary="Delete Conversation",
+    description=(
+        "Delete one of the authenticated user's "
+        "conversations."
+    ),
 )
 async def delete_conversation(
     conversation_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DatabaseSession,
+    current_user: CurrentUser,
 ) -> dict[str, str]:
     """
     Delete a conversation.
@@ -111,9 +144,12 @@ async def delete_conversation(
         conversation_id=conversation_id,
     )
 
-    if conversation is None:
+    if (
+        conversation is None
+        or conversation.user_id != current_user.id
+    ):
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found.",
         )
 
@@ -123,5 +159,7 @@ async def delete_conversation(
     )
 
     return {
-        "message": "Conversation deleted successfully."
+        "message": (
+            "Conversation deleted successfully."
+        )
     }

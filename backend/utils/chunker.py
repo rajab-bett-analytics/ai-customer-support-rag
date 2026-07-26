@@ -1,45 +1,87 @@
 """
 Text chunking utilities.
 
-Provides helper functions for splitting large
-documents into overlapping chunks suitable for
-embedding generation.
+Splits extracted PDF pages into overlapping chunks while
+preserving page numbers.
 
 Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
 
+from collections.abc import Sequence
+
 
 def chunk_text(
-    text: str,
-    chunk_size: int = 1000,
-    chunk_overlap: int = 200,
-) -> list[str]:
+    pages: Sequence[dict[str, int | str]],
+    chunk_size: int = 500,
+    overlap: int = 100,
+) -> list[dict[str, int | str]]:
     """
-    Split text into overlapping chunks.
+    Split extracted PDF pages into overlapping chunks.
 
     Args:
-        text: Clean document text.
-        chunk_size: Maximum characters per chunk.
-        chunk_overlap: Number of overlapping characters.
+        pages:
+            List of dictionaries returned by
+            extract_text_from_pdf().
+
+        chunk_size:
+            Maximum characters per chunk.
+
+        overlap:
+            Number of overlapping characters.
 
     Returns:
-        List of text chunks.
+        Example:
+
+        [
+            {
+                "page": 1,
+                "chunk_index": 0,
+                "text": "..."
+            },
+            {
+                "page": 1,
+                "chunk_index": 1,
+                "text": "..."
+            }
+        ]
     """
 
-    if not text.strip():
-        return []
+    chunks: list[dict[str, int | str]] = []
 
-    chunks: list[str] = []
+    chunk_index = 0
 
-    start = 0
-    text_length = len(text)
+    for page in pages:
 
-    while start < text_length:
-        end = start + chunk_size
+        page_number = int(page["page"])
+        text = str(page["text"]).strip()
 
-        chunks.append(text[start:end])
+        if not text:
+            continue
 
-        start += chunk_size - chunk_overlap
+        start = 0
+
+        while start < len(text):
+
+            end = start + chunk_size
+
+            chunk = text[start:end].strip()
+
+            if chunk:
+
+                chunks.append(
+                    {
+                        "page": page_number,
+                        "chunk_index": chunk_index,
+                        "text": chunk,
+                    }
+                )
+
+                chunk_index += 1
+
+            if end >= len(text):
+                break
+
+            start = end - overlap
 
     return chunks

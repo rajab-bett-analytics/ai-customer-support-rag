@@ -2,8 +2,9 @@
 Chat service.
 
 Coordinates Retrieval-Augmented Generation (RAG) by
-retrieving relevant document context, managing
-conversations, and generating grounded responses.
+classifying user intent, retrieving relevant document
+context, managing conversations, and generating AI
+responses.
 
 Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
@@ -13,15 +14,26 @@ from google import genai
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
+from backend.core.enums.intent import Intent
 from backend.models.conversation import Conversation
-from backend.services.conversation_service import ConversationService
-from backend.services.retrieval_service import RetrievalService
+from backend.services.conversation_service import (
+    ConversationService,
+)
+from backend.services.generation_service import (
+    GenerationService,
+)
+from backend.services.intent_service import (
+    IntentService,
+)
+from backend.services.retrieval_service import (
+    RetrievalService,
+)
 
 
 class ChatService:
     """
-    Handles question answering using Retrieval-Augmented
-    Generation (RAG).
+    Coordinates AI conversations by routing requests
+    to either conversational AI or the RAG pipeline.
     """
 
     def __init__(self) -> None:
@@ -30,8 +42,16 @@ class ChatService:
             api_key=settings.GOOGLE_API_KEY,
         )
 
-        self.retrieval_service = RetrievalService()
-        self.conversation_service = ConversationService()
+        self.intent_service = IntentService()
+        self.generation_service = (
+            GenerationService()
+        )
+        self.retrieval_service = (
+            RetrievalService()
+        )
+        self.conversation_service = (
+            ConversationService()
+        )
 
     async def ask(
         self,
@@ -40,12 +60,28 @@ class ChatService:
         question: str,
         conversation_id: int | None = None,
     ) -> tuple[int, str, list[dict]]:
+        """
+        Process a user's question.
 
-        conversation = await self._get_or_create_conversation(
-            db=db,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            question=question,
+        Depending on the detected intent,
+        route the request to either:
+
+        - GenerationService
+        - RetrievalService (RAG)
+
+        Returns:
+            Conversation ID,
+            AI response,
+            Retrieved sources.
+        """
+
+        conversation = (
+            await self._get_or_create_conversation(
+                db=db,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                question=question,
+            )
         )
 
         await self.conversation_service.save_message(
@@ -55,23 +91,44 @@ class ChatService:
             content=question,
         )
 
-        history = await self.conversation_service.get_history(
-            db=db,
-            conversation_id=conversation.id,
+        history = (
+            await self.conversation_service.get_history(
+                db=db,
+                conversation_id=conversation.id,
+            )
         )
 
-
-        # Handle normal conversation first
-        small_talk_answer = self._handle_small_talk(
+        intent = await self.intent_service.classify(
             question
         )
 
-        if small_talk_answer:
+        embeddings = []
 
-            answer = small_talk_answer
-            embeddings = []
+        if (
+            intent.intent
+            != Intent.DOCUMENT_QUERY
+        ):
 
-        else:
+            answer = (
+                await self.generation_service.generate(
+                    history=history,
+                    question=question,
+                )
+            )
+
+            if (
+                answer.strip()
+                == "DOCUMENT_QUERY"
+            ):
+
+                intent.intent = (
+                    Intent.DOCUMENT_QUERY
+                )
+
+        if (
+            intent.intent
+            == Intent.DOCUMENT_QUERY
+        ):
 
             context, embeddings = (
                 await self.retrieval_service.retrieve_context(
@@ -83,10 +140,11 @@ class ChatService:
             if not context:
 
                 answer = (
-                    "I couldn't find that information in "
-                    "the uploaded documents. "
-                    "Please try asking a question related "
-                    "to the available documents."
+                    "I couldn't find that "
+                    "information in the uploaded "
+                    "documents. Please try asking "
+                    "a question related to the "
+                    "available documents."
                 )
 
             else:
@@ -106,14 +164,16 @@ class ChatService:
                         )
                     )
 
-                    answer = response.text.strip()
+                    answer = (
+                        response.text.strip()
+                    )
 
                 except Exception as exc:
 
                     raise RuntimeError(
-                        f"Failed to generate AI response: {exc}"
+                        "Failed to generate "
+                        f"AI response: {exc}"
                     ) from exc
-
 
         await self.conversation_service.save_message(
             db=db,
@@ -121,7 +181,6 @@ class ChatService:
             role="assistant",
             content=answer,
         )
-
 
         sources = [
             {
@@ -131,72 +190,11 @@ class ChatService:
             for embedding in embeddings
         ]
 
-
         return (
             conversation.id,
             answer,
             sources,
         )
-
-
-    def _handle_small_talk(
-        self,
-        question: str,
-    ) -> str | None:
-        """
-        Handle simple conversation without RAG.
-        """
-
-        message = question.lower().strip()
-
-
-        greetings = {
-            "hello",
-            "hi",
-            "hey",
-            "good morning",
-            "good afternoon",
-            "good evening",
-        }
-
-
-        if message in greetings:
-
-            return (
-                "Hello 👋\n\n"
-                "I am your AI Customer Support Assistant. "
-                "I can help answer questions from uploaded "
-                "company documents and policies."
-            )
-
-
-        if (
-            "who are you" in message
-            or "what are you" in message
-        ):
-
-            return (
-                "I am an AI Customer Support Assistant "
-                "powered by Retrieval-Augmented Generation "
-                "(RAG). I help users find accurate answers "
-                "from uploaded company documents."
-            )
-
-
-        if message in {
-            "thanks",
-            "thank you",
-            "thankyou",
-        }:
-
-            return (
-                "You're welcome! 😊 "
-                "Feel free to ask if you need anything else."
-            )
-
-
-        return None
-
 
 
     def _build_prompt(
@@ -206,48 +204,52 @@ class ChatService:
         context: str,
     ) -> str:
         """
-        Construct the prompt sent to Gemini.
+        Build the Retrieval-Augmented Generation (RAG)
+        prompt sent to Gemini.
         """
 
         return f"""
 You are an AI Customer Support Assistant.
 
-You answer questions using the provided document
-context.
+Your responsibility is to answer questions using ONLY
+the provided document context.
 
-Important rules:
+Rules:
 
-1. Use ONLY the provided document context for factual
-answers.
+1. Answer ONLY using the supplied document context.
 
-2. Never invent policies, numbers, dates, salaries,
-or regulations.
+2. Never invent facts, policies, salaries, dates,
+regulations, benefits, or procedures.
 
-3. If the answer is not available in the context,
-say:
-"I couldn't find that information in the uploaded
-documents."
+3. Use the conversation history to understand
+follow-up questions.
 
-4. If the user asks a follow-up question, use the
-conversation history to understand the reference.
+4. If the answer is not explicitly stated in the
+document context, reply exactly:
 
-5. Give clear, professional answers.
+I couldn't find that information in the uploaded documents.
+
+5. Format your answers professionally:
+
+- Use Markdown.
+- Use headings where appropriate.
+- Use bullet points for lists.
+- Use numbered lists for procedures.
+- Use **bold** for important terms.
+- Quote important values exactly as they appear.
+- Keep answers clear and concise.
 
 Conversation History:
 {history}
 
-
 Document Context:
 {context}
-
 
 Current Question:
 {question}
 
-
 Answer:
 """
-
 
     async def _get_or_create_conversation(
         self,
@@ -256,6 +258,10 @@ Answer:
         conversation_id: int | None,
         question: str,
     ) -> Conversation:
+        """
+        Retrieve an existing conversation or create
+        a new one.
+        """
 
         if conversation_id is not None:
 
@@ -270,9 +276,11 @@ Answer:
             if conversation is not None:
                 return conversation
 
-
-        return await self.conversation_service.create_conversation(
-            db=db,
-            user_id=user_id,
-            title=question[:60],
+        return (
+            await self.conversation_service
+            .create_conversation(
+                db=db,
+                user_id=user_id,
+                title=question[:60],
+            )
         )

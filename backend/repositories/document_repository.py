@@ -7,14 +7,17 @@ Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.models.document import Document
 from backend.repositories.base import BaseRepository
 
 
-class DocumentRepository(BaseRepository[Document]):
+class DocumentRepository(
+    BaseRepository[Document]
+):
     """
     Repository for document-specific database operations.
     """
@@ -32,7 +35,13 @@ class DocumentRepository(BaseRepository[Document]):
         """
 
         result = await db.execute(
-            select(Document).where(
+            select(Document)
+            .options(
+                selectinload(
+                    Document.embeddings,
+                )
+            )
+            .where(
                 Document.id == document_id,
             )
         )
@@ -80,7 +89,7 @@ class DocumentRepository(BaseRepository[Document]):
         uploaded_by: int,
     ) -> list[Document]:
         """
-        Retrieve all documents uploaded by a specific user.
+        Retrieve all documents uploaded by a user.
         """
 
         result = await db.execute(
@@ -94,7 +103,31 @@ class DocumentRepository(BaseRepository[Document]):
             )
         )
 
-        return list(result.scalars().all())
+        return list(
+            result.scalars().all()
+        )
+
+    async def get_processed_documents(
+        self,
+        db: AsyncSession,
+    ) -> list[Document]:
+        """
+        Retrieve all successfully processed documents.
+        """
+
+        result = await db.execute(
+            select(Document)
+            .where(
+                Document.status == "processed",
+            )
+            .order_by(
+                Document.created_at.desc(),
+            )
+        )
+
+        return list(
+            result.scalars().all()
+        )
 
     async def get_by_status(
         self,
@@ -102,16 +135,57 @@ class DocumentRepository(BaseRepository[Document]):
         status: str,
     ) -> list[Document]:
         """
-        Retrieve all documents with a given processing status.
+        Retrieve documents by processing status.
         """
 
         result = await db.execute(
-            select(Document).where(
+            select(Document)
+            .where(
                 Document.status == status,
+            )
+            .order_by(
+                Document.created_at.desc(),
             )
         )
 
-        return list(result.scalars().all())
+        return list(
+            result.scalars().all()
+        )
+
+    async def count_documents(
+        self,
+        db: AsyncSession,
+    ) -> int:
+        """
+        Count all documents.
+        """
+
+        result = await db.execute(
+            select(
+                func.count(Document.id)
+            )
+        )
+
+        return int(
+            result.scalar_one()
+        )
+
+    async def exists(
+        self,
+        db: AsyncSession,
+        document_id: int,
+    ) -> bool:
+        """
+        Check whether a document exists.
+        """
+
+        result = await db.execute(
+            select(Document.id).where(
+                Document.id == document_id,
+            )
+        )
+
+        return result.scalar_one_or_none() is not None
 
     async def delete_document(
         self,
