@@ -7,26 +7,34 @@ and ownership of application resources.
 Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
 from sqlalchemy import Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from backend.models.mixins import TimestampMixin
+
 from backend.db.base import Base
+from backend.models.mixins import TimestampMixin
 
 
 if TYPE_CHECKING:
     from backend.models.conversation import Conversation
     from backend.models.document import Document
+    from backend.models.settings import Settings
 
 
-class User(TimestampMixin,Base):
+class User(
+    TimestampMixin,
+    Base,
+):
     """
     Represents an application user.
     """
 
     __tablename__ = "users"
+
 
     # ---------------------------------------------------------
     # Primary Key
@@ -37,6 +45,7 @@ class User(TimestampMixin,Base):
         primary_key=True,
     )
 
+
     # ---------------------------------------------------------
     # User Information
     # ---------------------------------------------------------
@@ -46,6 +55,7 @@ class User(TimestampMixin,Base):
         nullable=False,
     )
 
+
     email: Mapped[str] = mapped_column(
         String(255),
         unique=True,
@@ -53,16 +63,19 @@ class User(TimestampMixin,Base):
         nullable=False,
     )
 
+
     hashed_password: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
     )
+
 
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
         nullable=False,
     )
+
 
     # ---------------------------------------------------------
     # Relationships
@@ -73,7 +86,15 @@ class User(TimestampMixin,Base):
         cascade="all, delete-orphan",
     )
 
+
     conversations: Mapped[list["Conversation"]] = relationship(
         back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+    settings: Mapped["Settings"] = relationship(
+        back_populates="user",
+        uselist=False,
         cascade="all, delete-orphan",
     )

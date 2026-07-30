@@ -7,20 +7,59 @@ Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
 
-from pydantic import BaseModel
-from uuid import UUID
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict
 
 
 class DocumentResponse(BaseModel):
     """
-    Response returned after uploading a document.
+    Document returned to the frontend.
     """
 
-    id: UUID
-    filename: str
-    uploaded_at: datetime
+    # ---------------------------------------------------------
+    # Identity
+    # ---------------------------------------------------------
 
-    model_config = {
-        "from_attributes": True
-    }
+    id: int
+
+    # ---------------------------------------------------------
+    # File Information
+    # ---------------------------------------------------------
+
+    filename: str
+    stored_filename: str
+
+    mime_type: str
+    file_size: int
+
+    # ---------------------------------------------------------
+    # Processing Information
+    # ---------------------------------------------------------
+
+    status: str
+
+    page_count: int
+    chunk_count: int
+    embedding_count: int
+
+    indexed_at: datetime | None = None
+
+    error_message: str | None = None
+
+    # ---------------------------------------------------------
+    # Ownership
+    # ---------------------------------------------------------
+
+    uploaded_by: int
+
+    # ---------------------------------------------------------
+    # Timestamps
+    # ---------------------------------------------------------
+
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(
+        from_attributes=True,
+    )

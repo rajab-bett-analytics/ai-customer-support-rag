@@ -50,8 +50,8 @@ class ConversationService:
         )
 
         return await self.conversation_repository.create(
-            db=db,
-            conversation=conversation,
+            db,
+            conversation,
         )
 
     async def get_conversation(

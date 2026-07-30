@@ -29,6 +29,7 @@ class EmbeddingService:
     """
 
     def __init__(self) -> None:
+
         self.client = genai.Client(
             api_key=settings.GOOGLE_API_KEY,
         )
@@ -37,32 +38,53 @@ class EmbeddingService:
             EmbeddingRepository()
         )
 
+
     async def generate_embedding(
         self,
         text: str,
     ) -> list[float]:
         """
-        Generate an embedding vector for any text.
+        Generate embedding vector.
 
-        Args:
-            text: Text to embed.
-
-        Returns:
-            Embedding vector.
+        Uses the configured embedding model.
         """
+
+        if not text.strip():
+
+            raise EmbeddingError(
+                "Cannot generate embedding for empty text."
+            )
+
 
         logger.info(
             "Generating embedding."
         )
 
+
         try:
 
-            response = self.client.models.embed_content(
-                model=settings.EMBEDDING_MODEL,
-                contents=text,
+            response = (
+                self.client.models.embed_content(
+                    model=settings.EMBEDDING_MODEL,
+                    contents=text,
+                )
             )
 
-            return response.embeddings[0].values
+
+            if (
+                not response.embeddings
+                or not response.embeddings[0].values
+            ):
+
+                raise EmbeddingError(
+                    "Embedding response was empty."
+                )
+
+
+            return (
+                response.embeddings[0].values
+            )
+
 
         except Exception as exc:
 
@@ -74,27 +96,21 @@ class EmbeddingService:
                 "Unable to generate embedding."
             ) from exc
 
+
+
     async def create_query_embedding(
         self,
         query: str,
     ) -> list[float]:
         """
-        Generate an embedding for a user's search query.
-
-        Args:
-            query: User question.
-
-        Returns:
-            Query embedding vector.
+        Generate embedding for search query.
         """
-
-        logger.info(
-            "Generating query embedding."
-        )
 
         return await self.generate_embedding(
             query,
         )
+
+
 
     async def create_embedding(
         self,
@@ -106,12 +122,14 @@ class EmbeddingService:
         section: str | None = None,
     ) -> Embedding:
         """
-        Generate and store a single document embedding.
+        Generate and store one embedding.
         """
+
 
         vector = await self.generate_embedding(
             chunk_text,
         )
+
 
         embedding = Embedding(
             document_id=document_id,
@@ -122,6 +140,7 @@ class EmbeddingService:
             embedding=vector,
         )
 
+
         try:
 
             result = (
@@ -131,21 +150,26 @@ class EmbeddingService:
                 )
             )
 
+
             logger.info(
                 "Embedding stored successfully."
             )
 
+
             return result
+
 
         except Exception as exc:
 
             logger.exception(
-                "Failed to store embedding."
+                "Failed storing embedding."
             )
 
             raise EmbeddingError(
                 "Unable to store embedding."
             ) from exc
+
+
 
     async def create_embeddings(
         self,
@@ -154,36 +178,29 @@ class EmbeddingService:
         chunks: list[dict[str, int | str]],
     ) -> list[Embedding]:
         """
-        Generate embeddings for all document chunks and
-        store them in a single database transaction.
-
-        Args:
-            db: Database session.
-            document_id: Parent document ID.
-            chunks: Structured document chunks.
-
-        Returns:
-            Persisted Embedding objects.
+        Generate embeddings for document chunks.
         """
 
-        logger.info(
-            "Generating embeddings for %s chunks.",
-            len(chunks),
-        )
 
         embeddings: list[Embedding] = []
+
 
         try:
 
             for chunk in chunks:
 
+
                 chunk_text = str(
                     chunk["text"]
                 )
 
-                vector = await self.generate_embedding(
-                    chunk_text,
+
+                vector = (
+                    await self.generate_embedding(
+                        chunk_text,
+                    )
                 )
+
 
                 embeddings.append(
                     Embedding(
@@ -200,6 +217,8 @@ class EmbeddingService:
                     )
                 )
 
+
+
             results = (
                 await self.embedding_repository.create_many(
                     db=db,
@@ -207,59 +226,56 @@ class EmbeddingService:
                 )
             )
 
+
             logger.info(
-                "%s embeddings stored successfully.",
+                "%s embeddings created.",
                 len(results),
             )
 
+
             return results
+
+
 
         except Exception as exc:
 
+
             logger.exception(
-                "Failed to create document embeddings."
+                "Failed creating embeddings."
             )
 
+
             raise EmbeddingError(
-                "Unable to create document embeddings."
+                "Unable to create embeddings."
             ) from exc
+
+
 
     async def search_similar_chunks(
         self,
         db: AsyncSession,
         query: str,
         limit: int = 5,
+        threshold: float = 0.45,
+        embedding_model: str | None = None,
     ) -> list[Embedding]:
         """
-        Retrieve the most relevant document chunks for
-        a user's query.
-
-        Args:
-            db: Database session.
-            query: User question.
-            limit: Maximum number of chunks to retrieve.
-
-        Returns:
-            Most similar document chunks.
+        Search similar document chunks.
         """
 
-        logger.info(
-            "Searching similar document chunks."
+        query_embedding = await self.create_query_embedding(
+            query,
         )
 
         try:
-
-            query_embedding = (
-                await self.create_query_embedding(
-                    query,
-                )
-            )
 
             results = (
                 await self.embedding_repository.similarity_search(
                     db=db,
                     query_embedding=query_embedding,
                     limit=limit,
+                    threshold=threshold,
+                    embedding_model=embedding_model,
                 )
             )
 
@@ -276,6 +292,11 @@ class EmbeddingService:
                 "Similarity search failed."
             )
 
-            raise EmbeddingError(
-                "Unable to search document embeddings."
-            ) from exc
+            print("\n" + "=" * 80)
+            print("ORIGINAL EXCEPTION")
+            print("=" * 80)
+            print(f"Type: {type(exc).__name__}")
+            print(f"Message: {exc}")
+            print("=" * 80 + "\n")
+
+            raise

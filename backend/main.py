@@ -1,44 +1,32 @@
-"""
-Main application entry point.
-
-This module creates and configures the FastAPI application.
-
-As the project grows, additional routers, middleware,
-event handlers, and services will be registered here.
-
-Author: Rajab Cheruiyot Bett
-Project: AI Customer Support RAG Platform
-"""
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import api_router
 from backend.core.config import settings
-
-# ---------------------------------------------------------
-# Create the FastAPI application instance.
-# ---------------------------------------------------------
 
 app = FastAPI(
     title=settings.APP_NAME,
     description=(
         "Production-ready AI Customer Support platform "
-        "powered by FastAPI and Retrieval-Augmented "
-        "Generation (RAG)."
+        "powered by Retrieval-Augmented Generation (RAG)."
     ),
     version=settings.APP_VERSION,
 )
 
 # ---------------------------------------------------------
-# Configure CORS
+# CORS
 # ---------------------------------------------------------
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "http://127.0.0.1:5173",
         "http://localhost:5174",
+        "http://127.0.0.1:5174",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -46,22 +34,37 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------
-# Register API routers
+# Serve uploaded PDFs
+# ---------------------------------------------------------
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+UPLOADS_DIRECTORY = (
+    PROJECT_ROOT
+    / "storage"
+    / "uploads"
+)
+
+UPLOADS_DIRECTORY.mkdir(
+    parents=True,
+    exist_ok=True,
+)
+
+app.mount(
+    "/uploads",
+    StaticFiles(directory=UPLOADS_DIRECTORY),
+    name="uploads",
+)
+
+# ---------------------------------------------------------
+# API
 # ---------------------------------------------------------
 
 app.include_router(api_router)
 
-# ---------------------------------------------------------
-# Root endpoint
-# ---------------------------------------------------------
 
-
-@app.get("/", tags=["Health"])
+@app.get("/")
 async def root() -> dict[str, str]:
-    """
-    Health check endpoint.
-    """
-
     return {
         "message": "AI Customer Support RAG API is running."
     }

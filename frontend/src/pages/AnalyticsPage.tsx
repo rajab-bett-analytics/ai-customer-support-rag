@@ -1,4 +1,64 @@
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import { getAnalytics } from "../features/analytics/services/analyticsService";
+import type { Analytics } from "../features/analytics/types/Analytics";
+
 function AnalyticsPage() {
+  const [analytics, setAnalytics] =
+    useState<Analytics | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
+  useEffect(() => {
+    async function loadAnalytics() {
+      try {
+        setLoading(true);
+
+        const data =
+          await getAnalytics();
+
+        setAnalytics(data);
+      } catch (err) {
+        console.error(err);
+
+        setError(
+          "Failed to load analytics.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadAnalytics();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <p className="text-gray-500">
+          Loading analytics...
+        </p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <p className="text-red-600">
+          {error}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mb-8">
@@ -7,8 +67,9 @@ function AnalyticsPage() {
         </h1>
 
         <p className="mt-2 text-gray-600">
-          Monitor AI performance, customer interactions,
-          and knowledge base statistics.
+          Monitor AI performance,
+          customer interactions, and
+          knowledge base statistics.
         </p>
       </div>
 
@@ -19,7 +80,9 @@ function AnalyticsPage() {
           </h2>
 
           <p className="mt-2 text-3xl font-bold">
-            --
+            {
+              analytics?.conversations
+            }
           </p>
         </div>
 
@@ -29,7 +92,7 @@ function AnalyticsPage() {
           </h2>
 
           <p className="mt-2 text-3xl font-bold">
-            --
+            {analytics?.documents}
           </p>
         </div>
 
@@ -39,7 +102,9 @@ function AnalyticsPage() {
           </h2>
 
           <p className="mt-2 text-3xl font-bold">
-            --
+            {
+              analytics?.ai_responses
+            }
           </p>
         </div>
 
@@ -49,7 +114,10 @@ function AnalyticsPage() {
           </h2>
 
           <p className="mt-2 text-3xl font-bold">
-            --
+            {
+              analytics?.average_response_time
+            }
+            s
           </p>
         </div>
       </div>
@@ -60,8 +128,12 @@ function AnalyticsPage() {
         </h2>
 
         <p className="text-gray-500">
-          Analytics charts and performance metrics will
-          appear here as the platform collects data.
+          The analytics dashboard is
+          now connected to the backend.
+          Additional charts and
+          performance metrics can be
+          added as more analytics data
+          becomes available.
         </p>
       </div>
     </div>

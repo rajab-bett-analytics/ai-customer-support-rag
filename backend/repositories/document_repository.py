@@ -31,7 +31,8 @@ class DocumentRepository(
         document_id: int,
     ) -> Document | None:
         """
-        Retrieve a document by its ID.
+        Retrieve a document by its ID together with
+        its embeddings.
         """
 
         result = await db.execute(
@@ -94,6 +95,11 @@ class DocumentRepository(
 
         result = await db.execute(
             select(Document)
+            .options(
+                selectinload(
+                    Document.embeddings,
+                )
+            )
             .where(
                 Document.uploaded_by
                 == uploaded_by,
@@ -117,8 +123,14 @@ class DocumentRepository(
 
         result = await db.execute(
             select(Document)
+            .options(
+                selectinload(
+                    Document.embeddings,
+                )
+            )
             .where(
-                Document.status == "processed",
+                Document.status
+                == "processed",
             )
             .order_by(
                 Document.created_at.desc(),
@@ -140,6 +152,11 @@ class DocumentRepository(
 
         result = await db.execute(
             select(Document)
+            .options(
+                selectinload(
+                    Document.embeddings,
+                )
+            )
             .where(
                 Document.status == status,
             )
@@ -162,7 +179,9 @@ class DocumentRepository(
 
         result = await db.execute(
             select(
-                func.count(Document.id)
+                func.count(
+                    Document.id,
+                )
             )
         )
 
@@ -185,7 +204,10 @@ class DocumentRepository(
             )
         )
 
-        return result.scalar_one_or_none() is not None
+        return (
+            result.scalar_one_or_none()
+            is not None
+        )
 
     async def delete_document(
         self,

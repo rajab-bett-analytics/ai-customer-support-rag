@@ -10,10 +10,21 @@ Project: AI Customer Support RAG Platform
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
 
 from backend.db.base import Base
 from backend.models.mixins import TimestampMixin
@@ -44,7 +55,10 @@ class Document(TimestampMixin, Base):
     # ---------------------------------------------------------
 
     uploaded_by: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
     )
 
@@ -78,13 +92,41 @@ class Document(TimestampMixin, Base):
     )
 
     # ---------------------------------------------------------
-    # Processing Status
+    # Processing Metadata
     # ---------------------------------------------------------
 
     status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
         default="uploaded",
+    )
+
+    page_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    chunk_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    embedding_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    indexed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
     )
 
     # ---------------------------------------------------------

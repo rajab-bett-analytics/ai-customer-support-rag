@@ -15,9 +15,11 @@
     "@tanstack/react-query": "^5.101.4",
     "axios": "^1.18.1",
     "lucide-react": "^1.26.0",
+    "pdfjs-dist": "5.4.296",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-hook-form": "^7.82.0",
+    "react-pdf": "^10.4.1",
     "react-router-dom": "^7.18.1",
     "tailwindcss": "^4.3.3",
     "zod": "^4.4.3"

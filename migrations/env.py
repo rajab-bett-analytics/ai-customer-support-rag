@@ -20,23 +20,21 @@ from backend.db.base import Base
 # Import all models so Alembic can discover them
 import backend.models  # noqa: F401
 
+
 # ---------------------------------------------------------
 # Alembic Configuration
 # ---------------------------------------------------------
 
 config = context.config
 
-# Use the synchronous database URL for Alembic
 config.set_main_option(
     "sqlalchemy.url",
     settings.ALEMBIC_DATABASE_URL,
 )
 
-# Configure Python logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Metadata used for autogenerate
 target_metadata = Base.metadata
 
 
@@ -49,10 +47,8 @@ def run_migrations_offline() -> None:
     Run migrations without connecting to the database.
     """
 
-    url = config.get_main_option("sqlalchemy.url")
-
     context.configure(
-        url=url,
+        url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},

@@ -10,7 +10,6 @@ Project: AI Customer Support RAG Platform
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.exceptions import RetrievalError
 from backend.core.logger import get_logger
 from backend.models.embedding import Embedding
 from backend.repositories.embedding_repository import (
@@ -20,19 +19,27 @@ from backend.services.embedding_service import (
     EmbeddingService,
 )
 
-
 logger = get_logger(__name__)
 
 
 class RetrievalService:
     """
-    Handles Retrieval-Augmented Generation (RAG)
-    retrieval using vector similarity together with
-    keyword search.
+    Handles Retrieval-Augmented Generation (RAG).
+
+    Uses:
+
+    - Vector semantic search
+    - Keyword search
+    - Result merging
+    - Metadata preservation
     """
 
     def __init__(self) -> None:
-        self.embedding_service = EmbeddingService()
+
+        self.embedding_service = (
+            EmbeddingService()
+        )
+
         self.embedding_repository = (
             EmbeddingRepository()
         )
@@ -42,34 +49,40 @@ class RetrievalService:
         db: AsyncSession,
         query: str,
         limit: int = 5,
+        similarity_threshold: float = 0.75,
+        embedding_model: str | None = None,
     ) -> tuple[str, list[Embedding]]:
         """
-        Retrieve the most relevant document chunks.
-
-        Args:
-            db: Database session.
-            query: User question.
-            limit: Maximum number of retrieved chunks.
-
-        Returns:
-            A formatted context string together with the
-            retrieved embedding objects.
+        Retrieve relevant document chunks.
         """
 
         logger.info(
-            "Retrieving context for query: %s",
+            "Retrieving context | query=%s | limit=%s | threshold=%s",
             query,
+            limit,
+            similarity_threshold,
         )
 
         try:
+
+            logger.info("Starting vector search...")
 
             vector_results = (
                 await self.embedding_service.search_similar_chunks(
                     db=db,
                     query=query,
                     limit=limit,
+                    threshold=similarity_threshold,
+                    embedding_model=embedding_model,
                 )
             )
+
+            logger.info(
+                "Vector search returned %s results.",
+                len(vector_results),
+            )
+
+            logger.info("Starting keyword search...")
 
             keyword_results = (
                 await self.embedding_repository.keyword_search(
@@ -79,17 +92,24 @@ class RetrievalService:
                 )
             )
 
+            logger.info(
+                "Keyword search returned %s results.",
+                len(keyword_results),
+            )
+
             combined: list[Embedding] = []
-            seen_ids: set[int] = set()
+
+            seen: set[int] = set()
 
             for embedding in (
-                vector_results + keyword_results
+                vector_results
+                + keyword_results
             ):
 
-                if embedding.id in seen_ids:
+                if embedding.id in seen:
                     continue
 
-                seen_ids.add(
+                seen.add(
                     embedding.id
                 )
 
@@ -100,18 +120,21 @@ class RetrievalService:
             if not combined:
 
                 logger.info(
-                    "No relevant document chunks found."
+                    "No matching document chunks found."
                 )
 
                 return "", []
 
-            context_parts: list[str] = []
+            context_blocks: list[str] = []
 
-            for embedding in combined:
+            for index, embedding in enumerate(
+                combined,
+                start=1,
+            ):
 
-                filename = (
+                document_name = (
                     embedding.document.filename
-                    if embedding.document is not None
+                    if embedding.document
                     else "Unknown document"
                 )
 
@@ -127,35 +150,50 @@ class RetrievalService:
                     None,
                 )
 
-                metadata = [
-                    f"Document: {filename}",
-                    f"Chunk: {embedding.chunk_index}",
+                similarity = getattr(
+                    embedding,
+                    "similarity_score",
+                    None,
+                )
+
+                block = [
+                    "=" * 60,
+                    f"SOURCE {index}",
+                    "",
+                    f"Document : {document_name}",
+                    f"Chunk    : {embedding.chunk_index}",
                 ]
 
                 if page is not None:
-                    metadata.append(
-                        f"Page: {page}"
+                    block.append(
+                        f"Page     : {page}"
                     )
 
                 if section:
-                    metadata.append(
-                        f"Section: {section}"
+                    block.append(
+                        f"Section  : {section}"
                     )
 
-                context_parts.append(
-                    (
-                        "\n".join(metadata)
-                        + "\n\n"
-                        + embedding.chunk_text
+                if similarity is not None:
+                    block.append(
+                        f"Score    : {similarity:.3f}"
                     )
+
+                block.extend(
+                    [
+                        "",
+                        "Content:",
+                        embedding.chunk_text.strip(),
+                        "=" * 60,
+                    ]
                 )
 
-            context = (
-                "\n\n"
-                "------------------------------"
-                "\n\n"
-            ).join(
-                context_parts
+                context_blocks.append(
+                    "\n".join(block)
+                )
+
+            context = "\n\n".join(
+                context_blocks
             )
 
             logger.info(
@@ -168,12 +206,12 @@ class RetrievalService:
                 combined,
             )
 
-        except Exception as exc:
+        except Exception:
 
             logger.exception(
                 "Document retrieval failed."
             )
 
-            raise RetrievalError(
-                "Unable to retrieve relevant document context."
-            ) from exc
+            # Re-raise the ORIGINAL exception so the full traceback
+            # shows the exact failing line.
+            raise

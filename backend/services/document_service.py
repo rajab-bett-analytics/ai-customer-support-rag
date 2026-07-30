@@ -9,6 +9,7 @@ Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
 
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -34,12 +35,15 @@ class DocumentService:
     Handles document-related business logic.
     """
 
-    ALLOWED_CONTENT_TYPES = {"application/pdf"}
+    ALLOWED_CONTENT_TYPES = {
+        "application/pdf"
+    }
 
     def __init__(self) -> None:
         self.document_repository = (
             DocumentRepository()
         )
+
         self.embedding_service = (
             EmbeddingService()
         )
@@ -56,10 +60,6 @@ class DocumentService:
 
         self._validate_pdf(file)
 
-        # ---------------------------------------------------------
-        # Ensure upload directory exists
-        # ---------------------------------------------------------
-
         upload_dir = Path(
             settings.UPLOAD_DIRECTORY
         )
@@ -68,10 +68,6 @@ class DocumentService:
             parents=True,
             exist_ok=True,
         )
-
-        # ---------------------------------------------------------
-        # Save uploaded file
-        # ---------------------------------------------------------
 
         stored_filename = (
             f"{uuid4()}.pdf"
@@ -89,10 +85,6 @@ class DocumentService:
         ) as buffer:
             buffer.write(file_bytes)
 
-        # ---------------------------------------------------------
-        # Save metadata
-        # ---------------------------------------------------------
-
         document = Document(
             uploaded_by=current_user.id,
             filename=file.filename,
@@ -103,33 +95,22 @@ class DocumentService:
             status="uploaded",
         )
 
-        document = (
-            await self.document_repository.create(
-                db,
-                document,
-            )
+        document = await self.document_repository.create(
+            db,
+            document,
         )
 
         try:
 
-            # -----------------------------------------------------
-            # Extract PDF pages
-            # -----------------------------------------------------
-
             pages = extract_text_from_pdf(
                 file_path,
             )
-
-            # -----------------------------------------------------
-            # Clean each page individually
-            # -----------------------------------------------------
 
             cleaned_pages: list[
                 dict[str, int | str]
             ] = []
 
             for page in pages:
-
                 cleaned_pages.append(
                     {
                         "page": page["page"],
@@ -139,17 +120,9 @@ class DocumentService:
                     }
                 )
 
-            # -----------------------------------------------------
-            # Chunk pages
-            # -----------------------------------------------------
-
             chunks = chunk_text(
                 cleaned_pages,
             )
-
-            # -----------------------------------------------------
-            # Generate embeddings
-            # -----------------------------------------------------
 
             embeddings = (
                 await self.embedding_service.create_embeddings(
@@ -159,9 +132,27 @@ class DocumentService:
                 )
             )
 
-            # -----------------------------------------------------
-            # Mark processed
-            # -----------------------------------------------------
+            # ---------------------------------------------
+            # Processing metadata
+            # ---------------------------------------------
+
+            document.page_count = len(
+                pages
+            )
+
+            document.chunk_count = len(
+                chunks
+            )
+
+            document.embedding_count = len(
+                embeddings
+            )
+
+            document.indexed_at = (
+                datetime.utcnow()
+            )
+
+            document.error_message = None
 
             document.status = (
                 "processed"
@@ -172,7 +163,13 @@ class DocumentService:
 
         except Exception as exc:
 
-            document.status = "failed"
+            document.status = (
+                "failed"
+            )
+
+            document.error_message = (
+                str(exc)
+            )
 
             await db.commit()
             await db.refresh(document)
@@ -185,19 +182,13 @@ class DocumentService:
                 ),
             ) from exc
 
-        # ---------------------------------------------------------
-        # Response
-        # ---------------------------------------------------------
-
         return {
             "document_id": document.id,
             "filename": document.filename,
             "status": document.status,
-            "pages": len(pages),
-            "chunks_created": len(chunks),
-            "embeddings_created": len(
-                embeddings
-            ),
+            "pages": document.page_count,
+            "chunks_created": document.chunk_count,
+            "embeddings_created": document.embedding_count,
             "file_size": document.file_size,
         }
 
@@ -241,10 +232,7 @@ class DocumentService:
                 detail="Document not found.",
             )
 
-        if (
-            document.uploaded_by
-            != current_user.id
-        ):
+        if document.uploaded_by != current_user.id:
             raise HTTPException(
                 status_code=403,
                 detail=(

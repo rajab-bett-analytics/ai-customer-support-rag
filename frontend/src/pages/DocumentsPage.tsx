@@ -1,241 +1,141 @@
-import { useEffect, useState } from "react";
+import { Search, Upload } from "lucide-react";
 
-import {
-  getDocuments,
-  deleteDocument,
-  uploadDocument,
-  type Document,
-} from "../features/documents/documentService";
+import { useDocuments } from "../features/documents/hooks/useDocuments";
+
+import DocumentStats from "../features/documents/components/DocumentStats";
+import DocumentLoading from "../features/documents/components/DocumentLoading";
+import DocumentEmptyState from "../features/documents/components/DocumentEmptyState";
+import DocumentTable from "../features/documents/components/DocumentTable";
+
+import PageHeader from "../components/ui/PageHeader";
+import Button from "../components/ui/Button";
 
 function DocumentsPage() {
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-
-  async function loadDocuments() {
-    try {
-      const data = await getDocuments();
-      setDocuments(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleUpload(
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    setUploading(true);
-
-    try {
-      await uploadDocument(file);
-
-      await loadDocuments();
-
-      event.target.value = "";
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function handleDelete(documentId: number) {
-    const confirmed = window.confirm(
-      "Delete this document?",
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await deleteDocument(documentId);
-      await loadDocuments();
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  function getStatusBadge(status: string) {
-    switch (status.toLowerCase()) {
-      case "processed":
-        return (
-          <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
-            🟢 Processed
-          </span>
-        );
-
-      case "processing":
-        return (
-          <span className="rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
-            🟡 Processing
-          </span>
-        );
-
-      default:
-        return (
-          <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">
-            🔴 Failed
-          </span>
-        );
-    }
-  }
-
-  useEffect(() => {
-    void loadDocuments();
-  }, []);
+  const {
+    documents,
+    filteredDocuments,
+    loading,
+    uploading,
+    search,
+    setSearch,
+    upload,
+    remove,
+  } = useDocuments();
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 p-8">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-4xl font-bold">
-          Knowledge Base
-        </h1>
+    <div
+      className="
+        mx-auto
+        flex
+        h-full
+        min-h-0
+        w-full
+        max-w-[1500px]
+        flex-col
+        gap-6
+        px-4
+        py-6
+        sm:px-6
+        lg:px-8
+        xl:px-10
+      "
+    >
+      {/* Hidden file input */}
+      <input
+        id="document-upload"
+        type="file"
+        accept=".pdf"
+        hidden
+        disabled={uploading}
+        onChange={upload}
+      />
 
-        <p className="mt-2 text-gray-600">
-          Upload PDF documents that your AI assistant
-          will use to answer customer questions.
-        </p>
-      </div>
+      <PageHeader
+        title="Knowledge Base"
+        description="Manage the PDF documents used by your AI assistant for Retrieval-Augmented Generation (RAG)."
+        action={
+          <div className="flex items-center gap-3">
+            <div className="relative w-80">
+              <Search
+                size={18}
+                className="
+                  absolute
+                  left-3
+                  top-1/2
+                  -translate-y-1/2
+                  text-slate-400
+                "
+              />
 
-      {/* Upload Card */}
-      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6">
-        <h2 className="mb-4 text-lg font-semibold">
-          Upload PDF Document
-        </h2>
+              <input
+                value={search}
+                onChange={(event) =>
+                  setSearch(event.target.value)
+                }
+                placeholder="Search documents..."
+                className="
+                  h-11
+                  w-full
+                  rounded-lg
+                  border
+                  border-slate-300
+                  bg-white
+                  pl-10
+                  pr-4
+                  text-sm
+                  outline-none
+                  transition
+                  focus:border-blue-500
+                  focus:ring-2
+                  focus:ring-blue-100
+                "
+              />
+            </div>
 
-        <input
-          type="file"
-          accept=".pdf"
-          disabled={uploading}
-          onChange={handleUpload}
-          className="block w-full text-sm
-          file:mr-4
-          file:rounded-lg
-          file:border-0
-          file:bg-blue-600
-          file:px-4
-          file:py-2
-          file:text-white
-          file:hover:bg-blue-700"
-        />
-
-        <p className="mt-3 text-sm text-gray-500">
-          Supported format: PDF
-        </p>
-
-        {uploading && (
-          <div className="mt-4 rounded-lg bg-blue-100 p-3 text-blue-700">
-            Uploading document...
+            <Button
+              variant="primary"
+              onClick={() =>
+                document
+                  .getElementById("document-upload")
+                  ?.click()
+              }
+            >
+              <Upload size={18} />
+              {uploading
+                ? "Uploading..."
+                : "Upload PDF"}
+            </Button>
           </div>
+        }
+      />
+
+      <DocumentStats
+        documents={documents}
+      />
+
+      <div
+        className="
+          flex-1
+          min-h-0
+          overflow-hidden
+          rounded-2xl
+          border
+          border-slate-200
+          bg-white
+          shadow-sm
+        "
+      >
+        {loading ? (
+          <DocumentLoading />
+        ) : filteredDocuments.length === 0 ? (
+          <DocumentEmptyState />
+        ) : (
+          <DocumentTable
+            documents={filteredDocuments}
+            onDelete={remove}
+          />
         )}
       </div>
-
-      {/* Documents */}
-      {loading ? (
-        <div className="rounded-lg bg-white p-8 text-center shadow">
-          Loading documents...
-        </div>
-      ) : documents.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-12 text-center">
-          <div className="mb-4 text-6xl">📂</div>
-
-          <h2 className="text-2xl font-semibold">
-            No documents uploaded
-          </h2>
-
-          <p className="mt-2 text-gray-500">
-            Upload your first PDF to build your AI
-            knowledge base.
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-          <table className="min-w-full">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-6 py-4 text-left font-semibold">
-                  Filename
-                </th>
-
-                <th className="px-6 py-4 text-left font-semibold">
-                  Status
-                </th>
-
-                <th className="px-6 py-4 text-left font-semibold">
-                  Size
-                </th>
-
-                <th className="px-6 py-4 text-left font-semibold">
-                  Uploaded
-                </th>
-
-                <th className="px-6 py-4 text-center font-semibold">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {documents.map((document) => (
-                <tr
-                  key={document.id}
-                  className="border-t transition hover:bg-gray-50"
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">
-                        📄
-                      </span>
-
-                      <span className="font-medium">
-                        {document.filename}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="px-6 py-4">
-                    {getStatusBadge(document.status)}
-                  </td>
-
-                  <td className="px-6 py-4">
-                    {(
-                      document.file_size / 1024
-                    ).toFixed(2)}{" "}
-                    KB
-                  </td>
-
-                  <td className="px-6 py-4 text-gray-600">
-                    {new Date(
-                      document.created_at,
-                    ).toLocaleString()}
-                  </td>
-
-                  <td className="px-6 py-4 text-center">
-                    <button
-                      onClick={() =>
-                        handleDelete(document.id)
-                      }
-                      className="rounded-lg border border-red-500 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-600 hover:text-white"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }

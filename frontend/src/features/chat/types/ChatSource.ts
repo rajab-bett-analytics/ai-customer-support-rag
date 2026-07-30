@@ -1,0 +1,1 @@
+export { type DocumentSource as ChatSource } from "../../documents/types/DocumentSource";

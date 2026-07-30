@@ -10,12 +10,17 @@ Author: Rajab Cheruiyot Bett
 Project: AI Customer Support RAG Platform
 """
 
-from google import genai
+from urllib.parse import quote
+
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.config import settings
 from backend.core.enums.intent import Intent
 from backend.models.conversation import Conversation
+from backend.models.user import User
+from backend.repositories.user_repository import (
+    UserRepository,
+)
 from backend.services.conversation_service import (
     ConversationService,
 )
@@ -28,30 +33,55 @@ from backend.services.intent_service import (
 from backend.services.retrieval_service import (
     RetrievalService,
 )
+from backend.services.settings_service import (
+    SettingsService,
+)
+
+
+class ChatResult(BaseModel):
+    """
+    Internal response returned by ChatService.
+    """
+
+    conversation_id: int
+    answer: str
+    sources: list[dict[str, object]]
 
 
 class ChatService:
     """
-    Coordinates AI conversations by routing requests
-    to either conversational AI or the RAG pipeline.
+    Coordinates AI conversations.
+
+    Routes requests to:
+
+    - General AI conversation
+    - Retrieval-Augmented Generation pipeline
     """
 
     def __init__(self) -> None:
 
-        self.client = genai.Client(
-            api_key=settings.GOOGLE_API_KEY,
-        )
-
         self.intent_service = IntentService()
+
         self.generation_service = (
             GenerationService()
         )
+
         self.retrieval_service = (
             RetrievalService()
         )
+
         self.conversation_service = (
             ConversationService()
         )
+
+        self.settings_service = (
+            SettingsService()
+        )
+
+        self.user_repository = (
+            UserRepository()
+        )
+
 
     async def ask(
         self,
@@ -59,21 +89,30 @@ class ChatService:
         user_id: int,
         question: str,
         conversation_id: int | None = None,
-    ) -> tuple[int, str, list[dict]]:
+    ) -> ChatResult:
         """
-        Process a user's question.
-
-        Depending on the detected intent,
-        route the request to either:
-
-        - GenerationService
-        - RetrievalService (RAG)
-
-        Returns:
-            Conversation ID,
-            AI response,
-            Retrieved sources.
+        Process user question.
         """
+
+        user = await self.user_repository.get_by_id(
+            db,
+            user_id,
+        )
+
+
+        if user is None:
+            raise RuntimeError(
+                "User not found."
+            )
+
+
+        user_settings = (
+            await self.settings_service.get_settings(
+                db=db,
+                user=user,
+            )
+        )
+
 
         conversation = (
             await self._get_or_create_conversation(
@@ -84,12 +123,14 @@ class ChatService:
             )
         )
 
+
         await self.conversation_service.save_message(
             db=db,
             conversation_id=conversation.id,
             role="user",
             content=question,
         )
+
 
         history = (
             await self.conversation_service.get_history(
@@ -98,54 +139,63 @@ class ChatService:
             )
         )
 
+
         intent = await self.intent_service.classify(
             question
         )
 
+
         embeddings = []
 
-        if (
-            intent.intent
-            != Intent.DOCUMENT_QUERY
-        ):
+        answer = ""
+
+
+        # ==========================================
+        # GENERAL CONVERSATION
+        # ==========================================
+
+        if intent.intent != Intent.DOCUMENT_QUERY:
+
 
             answer = (
                 await self.generation_service.generate(
                     history=history,
                     question=question,
+                    user_settings=user_settings,
                 )
             )
 
-            if (
-                answer.strip()
-                == "DOCUMENT_QUERY"
-            ):
+
+            if answer.strip() == "DOCUMENT_QUERY":
 
                 intent.intent = (
                     Intent.DOCUMENT_QUERY
                 )
 
-        if (
-            intent.intent
-            == Intent.DOCUMENT_QUERY
-        ):
+
+        # ==========================================
+        # RAG PIPELINE
+        # ==========================================
+
+        if intent.intent == Intent.DOCUMENT_QUERY:
+
 
             context, embeddings = (
                 await self.retrieval_service.retrieve_context(
                     db=db,
                     query=question,
+                    limit=user_settings.top_k,
                 )
             )
+
 
             if not context:
 
                 answer = (
-                    "I couldn't find that "
-                    "information in the uploaded "
-                    "documents. Please try asking "
-                    "a question related to the "
-                    "available documents."
+                    "I couldn't find that information "
+                    "in the uploaded documents."
                 )
+
 
             else:
 
@@ -153,27 +203,19 @@ class ChatService:
                     history=history,
                     question=question,
                     context=context,
+                    system_prompt=(
+                        user_settings.system_prompt
+                    ),
                 )
 
-                try:
 
-                    response = (
-                        self.client.models.generate_content(
-                            model=settings.CHAT_MODEL,
-                            contents=prompt,
-                        )
+                answer = (
+                    await self.generation_service.generate_rag(
+                        prompt=prompt,
+                        user_settings=user_settings,
                     )
+                )
 
-                    answer = (
-                        response.text.strip()
-                    )
-
-                except Exception as exc:
-
-                    raise RuntimeError(
-                        "Failed to generate "
-                        f"AI response: {exc}"
-                    ) from exc
 
         await self.conversation_service.save_message(
             db=db,
@@ -182,19 +224,95 @@ class ChatService:
             content=answer,
         )
 
-        sources = [
-            {
-                "document_id": embedding.document_id,
-                "chunk_index": embedding.chunk_index,
-            }
-            for embedding in embeddings
-        ]
 
-        return (
-            conversation.id,
-            answer,
-            sources,
+        sources = self._build_sources(
+            embeddings
         )
+
+
+        return ChatResult(
+            conversation_id=conversation.id,
+            answer=answer,
+            sources=sources,
+        )
+
+
+    def _build_sources(
+        self,
+        embeddings,
+    ) -> list[dict[str, object]]:
+        """
+        Build document citations.
+        """
+
+        seen = set()
+
+        sources = []
+
+
+        for embedding in embeddings:
+
+            document = embedding.document
+
+
+            if document is None:
+                continue
+
+
+            page = getattr(
+                embedding,
+                "page_number",
+                None,
+            )
+
+
+            key = (
+                embedding.document_id,
+                page,
+            )
+
+
+            if key in seen:
+                continue
+
+
+            seen.add(key)
+
+
+            sources.append(
+                {
+                    "document_id": (
+                        embedding.document_id
+                    ),
+
+                    "document_name": (
+                        document.filename
+                    ),
+
+                    "document_url": (
+                        "http://localhost:8000/uploads/"
+                        f"{quote(document.stored_filename)}"
+                    ),
+
+                    "page": page,
+
+                    "chunk_index": (
+                        embedding.chunk_index
+                    ),
+
+                    "section": (
+                        embedding.section
+                    ),
+
+                    "chunk_text": (
+                        embedding.chunk_text
+                    ),
+                }
+            )
+
+
+        return sources
+
 
 
     def _build_prompt(
@@ -202,54 +320,50 @@ class ChatService:
         history: str,
         question: str,
         context: str,
+        system_prompt: str | None,
     ) -> str:
         """
-        Build the Retrieval-Augmented Generation (RAG)
-        prompt sent to Gemini.
+        Build RAG prompt.
         """
 
         return f"""
-You are an AI Customer Support Assistant.
+{system_prompt or "You are an AI Customer Support Assistant."}
 
-Your responsibility is to answer questions using ONLY
-the provided document context.
 
-Rules:
+RULES:
 
-1. Answer ONLY using the supplied document context.
-
-2. Never invent facts, policies, salaries, dates,
-regulations, benefits, or procedures.
-
-3. Use the conversation history to understand
-follow-up questions.
-
-4. If the answer is not explicitly stated in the
-document context, reply exactly:
+- Use ONLY supplied document context.
+- Never invent information.
+- Never create fake policies.
+- If information is missing say:
 
 I couldn't find that information in the uploaded documents.
 
-5. Format your answers professionally:
+- Include citations:
 
-- Use Markdown.
-- Use headings where appropriate.
-- Use bullet points for lists.
-- Use numbered lists for procedures.
-- Use **bold** for important terms.
-- Quote important values exactly as they appear.
-- Keep answers clear and concise.
+(Source: Document Name, Page X)
 
-Conversation History:
+- Never mention chunks.
+
+
+CONVERSATION HISTORY:
+
 {history}
 
-Document Context:
+
+DOCUMENT CONTEXT:
+
 {context}
 
-Current Question:
+
+QUESTION:
+
 {question}
 
-Answer:
+
+ANSWER:
 """
+
 
     async def _get_or_create_conversation(
         self,
@@ -259,26 +373,24 @@ Answer:
         question: str,
     ) -> Conversation:
         """
-        Retrieve an existing conversation or create
-        a new one.
+        Retrieve existing conversation or create one.
         """
 
         if conversation_id is not None:
 
             conversation = (
-                await self.conversation_service
-                .get_conversation(
+                await self.conversation_service.get_conversation(
                     db=db,
                     conversation_id=conversation_id,
                 )
             )
 
-            if conversation is not None:
+            if conversation:
                 return conversation
 
+
         return (
-            await self.conversation_service
-            .create_conversation(
+            await self.conversation_service.create_conversation(
                 db=db,
                 user_id=user_id,
                 title=question[:60],

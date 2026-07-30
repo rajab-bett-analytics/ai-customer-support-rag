@@ -1,5 +1,7 @@
 import api from "../../../api/client";
 
+import type { ChatSource } from "../types/ChatSource";
+
 export interface ChatRequest {
   question: string;
   conversation_id?: number | null;
@@ -7,8 +9,8 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   conversation_id: number;
-  question: string;
   answer: string;
+  sources: ChatSource[];
 }
 
 export async function askQuestion(

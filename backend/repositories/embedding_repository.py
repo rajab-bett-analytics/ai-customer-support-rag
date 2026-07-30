@@ -70,8 +70,14 @@ class EmbeddingRepository(
 
         result = await db.execute(
             select(Embedding)
+            .options(
+                selectinload(
+                    Embedding.document
+                )
+            )
             .where(
-                Embedding.document_id == document_id
+                Embedding.document_id
+                == document_id
             )
             .order_by(
                 Embedding.page_number,
@@ -79,7 +85,9 @@ class EmbeddingRepository(
             )
         )
 
-        return list(result.scalars().all())
+        return list(
+            result.scalars().all()
+        )
 
     async def create_many(
         self,
@@ -90,12 +98,16 @@ class EmbeddingRepository(
         Persist multiple embeddings.
         """
 
-        db.add_all(embeddings)
+        db.add_all(
+            embeddings
+        )
 
         await db.commit()
 
         for embedding in embeddings:
-            await db.refresh(embedding)
+            await db.refresh(
+                embedding
+            )
 
         return embeddings
 
@@ -105,32 +117,50 @@ class EmbeddingRepository(
         query_embedding: list[float],
         limit: int = 5,
         threshold: float = 0.45,
+        embedding_model: str | None = None,
     ) -> list[Embedding]:
         """
         Retrieve semantically similar chunks.
         """
 
-        distance = (
-            Embedding.embedding.cosine_distance(
-                query_embedding,
+        distance = Embedding.embedding.cosine_distance(
+            query_embedding
+        )
+
+        query = (
+            select(Embedding)
+            .options(
+                selectinload(
+                    Embedding.document
+                )
+            )
+        )
+
+        if embedding_model is not None:
+            query = query.where(
+                Embedding.embedding_model
+                == embedding_model
+            )
+
+        query = (
+            query.where(
+                distance <= threshold
+            )
+            .order_by(
+                distance.asc()
+            )
+            .limit(
+                limit
             )
         )
 
         result = await db.execute(
-            select(Embedding)
-            .options(
-                selectinload(
-                    Embedding.document,
-                )
-            )
-            .where(
-                distance < threshold,
-            )
-            .order_by(distance.asc())
-            .limit(limit)
+            query
         )
 
-        return list(result.scalars().all())
+        return list(
+            result.scalars().all()
+        )
 
     async def keyword_search(
         self,
@@ -143,11 +173,17 @@ class EmbeddingRepository(
         """
 
         keywords = [
-            word.lower().strip(".,?!")
+            word.lower().strip(
+                ".,?!"
+            )
             for word in query.split()
             if (
-                word.lower().strip(".,?!")
-                and word.lower().strip(".,?!")
+                word.lower().strip(
+                    ".,?!"
+                )
+                and word.lower().strip(
+                    ".,?!"
+                )
                 not in self.STOP_WORDS
             )
         ]
@@ -158,7 +194,9 @@ class EmbeddingRepository(
         conditions = [
             func.lower(
                 Embedding.chunk_text
-            ).contains(keyword)
+            ).contains(
+                keyword
+            )
             for keyword in keywords
         ]
 
@@ -166,17 +204,23 @@ class EmbeddingRepository(
             select(Embedding)
             .options(
                 selectinload(
-                    Embedding.document,
+                    Embedding.document
                 )
             )
             .where(
-                or_(*conditions)
+                or_(
+                    *conditions
+                )
             )
             .order_by(
                 Embedding.page_number,
                 Embedding.chunk_index,
             )
-            .limit(limit)
+            .limit(
+                limit
+            )
         )
 
-        return list(result.scalars().all())
+        return list(
+            result.scalars().all()
+        )

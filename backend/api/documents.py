@@ -23,10 +23,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.dependencies import get_current_user
 from backend.db.database import get_db
 from backend.models.user import User
+from backend.schemas.document import DocumentResponse
 from backend.services.document_service import (
     DocumentService,
 )
-
 
 router = APIRouter(
     prefix="/documents",
@@ -55,11 +55,6 @@ UploadedFile = Annotated[
     "/upload",
     status_code=status.HTTP_201_CREATED,
     summary="Upload Document",
-    description=(
-        "Upload a PDF document, extract its text, generate "
-        "embeddings, and add it to the searchable knowledge "
-        "base."
-    ),
 )
 async def upload_document(
     file: UploadedFile,
@@ -79,6 +74,7 @@ async def upload_document(
 
 @router.get(
     "",
+    response_model=list[DocumentResponse],
     status_code=status.HTTP_200_OK,
     summary="List Documents",
     description=(
@@ -89,25 +85,26 @@ async def upload_document(
 async def list_documents(
     current_user: CurrentUser,
     db: DatabaseSession,
-) -> list:
+) -> list[DocumentResponse]:
     """
     Retrieve all uploaded documents.
     """
 
-    return await document_service.get_documents(
+    documents = await document_service.get_documents(
         db=db,
         current_user=current_user,
     )
+
+    return [
+        DocumentResponse.model_validate(document)
+        for document in documents
+    ]
 
 
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_200_OK,
     summary="Delete Document",
-    description=(
-        "Delete a document together with all associated "
-        "embeddings from the knowledge base."
-    ),
 )
 async def delete_document(
     document_id: int,

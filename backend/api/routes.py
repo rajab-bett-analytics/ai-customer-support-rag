@@ -12,13 +12,25 @@ Project: AI Customer Support RAG Platform
 """
 
 from fastapi import APIRouter
+
+from backend.api.analytics import (
+    router as analytics_router,
+)
+from backend.api.auth import (
+    router as auth_router,
+)
+from backend.api.chat import (
+    router as chat_router,
+)
 from backend.api.conversations import (
     router as conversation_router,
 )
-
-from backend.api.auth import router as auth_router
-from backend.api.documents import router as document_router
-from backend.api.chat import router as chat_router
+from backend.api.documents import (
+    router as document_router,
+)
+from backend.api.settings import (
+    router as settings_router,
+)
 
 # ---------------------------------------------------------
 # Main API Router
@@ -34,3 +46,5 @@ api_router.include_router(auth_router)
 api_router.include_router(document_router)
 api_router.include_router(chat_router)
 api_router.include_router(conversation_router)
+api_router.include_router(settings_router)
+api_router.include_router(analytics_router)

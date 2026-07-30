@@ -30,11 +30,15 @@ from sqlalchemy.orm import (
 from backend.db.base import Base
 from backend.models.mixins import TimestampMixin
 
+
 if TYPE_CHECKING:
     from backend.models.document import Document
 
 
-class Embedding(TimestampMixin, Base):
+class Embedding(
+    TimestampMixin,
+    Base,
+):
     """
     Represents one embedded document chunk.
     """
@@ -50,6 +54,7 @@ class Embedding(TimestampMixin, Base):
         ),
     )
 
+
     # ---------------------------------------------------------
     # Primary Key
     # ---------------------------------------------------------
@@ -58,6 +63,7 @@ class Embedding(TimestampMixin, Base):
         Integer,
         primary_key=True,
     )
+
 
     # ---------------------------------------------------------
     # Parent Document
@@ -72,6 +78,7 @@ class Embedding(TimestampMixin, Base):
         index=True,
     )
 
+
     # ---------------------------------------------------------
     # Chunk Metadata
     # ---------------------------------------------------------
@@ -82,20 +89,42 @@ class Embedding(TimestampMixin, Base):
         index=True,
     )
 
+
     chunk_index: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
     )
+
 
     section: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
 
+
     chunk_text: Mapped[str] = mapped_column(
         Text,
         nullable=False,
     )
+
+
+    # ---------------------------------------------------------
+    # Embedding Metadata
+    # ---------------------------------------------------------
+
+    embedding_model: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="gemini-embedding-001",
+    )
+
+
+    embedding_dimension: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=3072,
+    )
+
 
     # ---------------------------------------------------------
     # Vector Embedding
@@ -105,6 +134,7 @@ class Embedding(TimestampMixin, Base):
         Vector(3072),
         nullable=False,
     )
+
 
     # ---------------------------------------------------------
     # Relationships

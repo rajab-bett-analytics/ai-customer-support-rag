@@ -33,11 +33,22 @@ class ChatRequest(BaseModel):
 
 class SourceResponse(BaseModel):
     """
-    Source document chunk used to generate the answer.
+    Source document used to generate the answer.
     """
 
     document_id: int
+
+    document_name: str
+
+    document_url: str
+
+    page: int | None = None
+
     chunk_index: int
+
+    section: str | None = None
+
+    chunk_text: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -46,6 +57,9 @@ class ChatResponse(BaseModel):
     """
 
     conversation_id: int
+
     question: str
+
     answer: str
+
     sources: list[SourceResponse]

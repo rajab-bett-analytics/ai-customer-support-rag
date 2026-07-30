@@ -23,7 +23,6 @@ from backend.schemas.chat import (
 )
 from backend.services.chat_service import ChatService
 
-
 router = APIRouter(
     prefix="/chat",
     tags=["Chat"],
@@ -49,9 +48,15 @@ CurrentUser = Annotated[
     summary="Ask a Question",
     description=(
         "Submit a question to the AI Customer Support "
-        "Assistant. The service automatically determines "
-        "whether the request requires document retrieval "
-        "or a general conversational response."
+        "Assistant. The assistant automatically decides "
+        "whether Retrieval-Augmented Generation (RAG) "
+        "is required, retrieves relevant document "
+        "context when necessary, generates an answer, "
+        "and returns supporting citations."
+    ),
+    response_description=(
+        "AI-generated answer together with conversation "
+        "information and document citations."
     ),
 )
 async def ask_question(
@@ -60,22 +65,27 @@ async def ask_question(
     current_user: CurrentUser,
 ) -> ChatResponse:
     """
-    Process a user's question and return an AI-generated
-    response together with any retrieved document sources.
+    Ask the AI assistant a question.
+
+    Workflow
+    --------
+    1. Validate the authenticated user.
+    2. Retrieve relevant knowledge-base documents (if needed).
+    3. Generate an AI response.
+    4. Save the conversation.
+    5. Return the answer together with supporting citations.
     """
 
-    conversation_id, answer, sources = (
-        await chat_service.ask(
-            db=db,
-            user_id=current_user.id,
-            question=request.question,
-            conversation_id=request.conversation_id,
-        )
+    response = await chat_service.ask(
+        db=db,
+        user_id=current_user.id,
+        question=request.question,
+        conversation_id=request.conversation_id,
     )
 
     return ChatResponse(
-        conversation_id=conversation_id,
+        conversation_id=response.conversation_id,
         question=request.question,
-        answer=answer,
-        sources=sources,
+        answer=response.answer,
+        sources=response.sources,
     )
