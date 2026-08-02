@@ -8,6 +8,10 @@ The system enables organizations to upload their knowledge base, perform semanti
 
 ## Preview
 
+### Login
+
+![Login](docs/images/login.png)
+
 ### Dashboard
 
 ![Dashboard](docs/images/dashboard.png)
